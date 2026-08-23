@@ -3,11 +3,8 @@ import {
   useSignal,
   useVisibleTask$,
 } from '@builder.io/qwik';
-
-type HealthResponse = {
-  status?: string;
-  [key: string]: unknown;
-};
+import { getHealth } from '~/services/api';
+import type { HealthResponse } from '~/types/health';
 
 export default component$(() => {
   const health = useSignal<HealthResponse | null>(null);
@@ -16,17 +13,7 @@ export default component$(() => {
 
   useVisibleTask$(async () => {
     try {
-      const response = await fetch(
-        'http://127.0.0.1:8000/api/health'
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `API returned ${response.status} ${response.statusText}`
-        );
-      }
-
-      health.value = await response.json();
+      health.value = await getHealth();
     } catch (caughtError) {
       error.value =
         caughtError instanceof Error
