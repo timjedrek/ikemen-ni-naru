@@ -1,0 +1,35 @@
+# Local development database only. The FastAPI app and Qwik frontend run on the
+# host (not in Docker yet — that's deferred to Phase 18). This single Postgres
+# service is intended to behave identically on Arch and macOS: the app always
+# connects via localhost:5432 using DATABASE_URL from backend/.env.
+#
+# Common commands:
+#   docker compose up -d      start Postgres in the background
+#   docker compose down       stop it, KEEP the data (named volume persists)
+#   docker compose down -v     stop it and DELETE the data
+#   docker compose logs -f db  follow the database logs
+
+services:
+  db:
+    image: postgres:17
+    # These bootstrap the initial role/database on first run. For local dev the
+    # values are non-secret and must match the credentials in backend/.env.
+    environment:
+      POSTGRES_USER: health
+      POSTGRES_PASSWORD: health
+      POSTGRES_DB: health
+    ports:
+      # host:container — exposes the DB on localhost:5432 for the host process.
+      - "5432:5432"
+    volumes:
+      # Named volume: your rows live here and survive `docker compose down`.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Lets tooling wait until Postgres is actually ready to accept connections.
+      test: ["CMD-SHELL", "pg_isready -U health -d health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
