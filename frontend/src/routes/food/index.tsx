@@ -55,6 +55,16 @@ function blankForm(): FormState {
   };
 }
 
+// Atwater factors: 4 cal/g protein & carb, 9 cal/g fat. Returns "" when no macros
+// are entered so the field stays blank rather than showing 0.
+function caloriesFromMacros(form: FormState): string {
+  const protein = Number(form.protein_g) || 0;
+  const carb = Number(form.carb_g) || 0;
+  const fat = Number(form.fat_g) || 0;
+  if (!protein && !carb && !fat) return "";
+  return String(Math.round(protein * 4 + carb * 4 + fat * 9));
+}
+
 // Tinted badge per meal — alternating brand/accent so the list scans quickly.
 const MEAL_BADGE: Record<string, string> = {
   breakfast: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
@@ -334,21 +344,6 @@ export default component$(() => {
                 </label>
               </div>
 
-              <div>
-                <label class={labelClass}>
-                  Calories
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="1"
-                    class={inputClass}
-                    value={form.calories}
-                    onInput$={(_, el) => (form.calories = el.value)}
-                  />
-                </label>
-              </div>
-
               <div class="grid grid-cols-3 gap-3">
                 <label class={labelClass}>
                   Protein
@@ -359,7 +354,10 @@ export default component$(() => {
                     step="0.01"
                     class={inputClass}
                     value={form.protein_g}
-                    onInput$={(_, el) => (form.protein_g = el.value)}
+                    onInput$={(_, el) => {
+                      form.protein_g = el.value;
+                      form.calories = caloriesFromMacros(form);
+                    }}
                   />
                 </label>
                 <label class={labelClass}>
@@ -371,7 +369,10 @@ export default component$(() => {
                     step="0.01"
                     class={inputClass}
                     value={form.carb_g}
-                    onInput$={(_, el) => (form.carb_g = el.value)}
+                    onInput$={(_, el) => {
+                      form.carb_g = el.value;
+                      form.calories = caloriesFromMacros(form);
+                    }}
                   />
                 </label>
                 <label class={labelClass}>
@@ -383,7 +384,23 @@ export default component$(() => {
                     step="0.01"
                     class={inputClass}
                     value={form.fat_g}
-                    onInput$={(_, el) => (form.fat_g = el.value)}
+                    onInput$={(_, el) => {
+                      form.fat_g = el.value;
+                      form.calories = caloriesFromMacros(form);
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label class={labelClass}>
+                  Calories{" "}
+                  <span class="font-normal text-subtle">(auto)</span>
+                  <input
+                    type="number"
+                    readOnly
+                    class={`${inputClass} bg-black/5 dark:bg-white/5`}
+                    value={form.calories}
                   />
                 </label>
               </div>

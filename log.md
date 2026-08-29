@@ -5,6 +5,28 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — UI: auto-calculate calories from macros
+
+**Change:** reordered the food-entry form so the macro inputs (protein / carbs
+/ fat) come first, with calories after. Calories is now a **read-only, derived**
+field computed from the macros using Atwater factors: 4 cal/g protein, 4 cal/g
+carb, 9 cal/g fat. It updates live on every macro `onInput$` and stays blank
+until at least one macro is entered (rather than showing 0).
+
+**Files:** `frontend/src/routes/food/index.tsx` — added `caloriesFromMacros()`
+helper; macro handlers recompute `form.calories`; calories `<input>` is
+`readOnly` and labeled "(auto)".
+
+**Notes / gotchas**
+- The API still accepts `calories` as a client-supplied int, so no backend
+  change was needed — the frontend just fills it deterministically.
+- On edit (`startEdit`), the stored calories value loads as-is; it only
+  recomputes once a macro field is touched.
+- The `serving` field is display-only free text (e.g. "1 cup") — it does not
+  scale macros or calories. Left as-is by design.
+
+---
+
 ## 2026-08-29 — Fix: session cookie dropped in local dev (login loop)
 
 **Symptom:** register/login appeared to fail — after submitting you landed back
