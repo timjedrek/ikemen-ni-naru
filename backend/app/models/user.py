@@ -7,7 +7,10 @@ from app.database.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.food_entry import FoodEntry
+    from app.models.mood_entry import MoodEntry
     from app.models.session import Session
+    from app.models.sleep_entry import SleepEntry
+    from app.models.weight_entry import WeightEntry
 
 
 class User(Base, TimestampMixin):
@@ -29,6 +32,23 @@ class User(Base, TimestampMixin):
     # Deleting a user removes their owned records (ON DELETE CASCADE at the DB
     # level via the FK; passive_deletes lets Postgres do the work).
     food_entries: Mapped[list["FoodEntry"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    # Health trackers (buildplan Phase 7), all cascade-deleted with the user.
+    weight_entries: Mapped[list["WeightEntry"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    mood_entries: Mapped[list["MoodEntry"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    sleep_entries: Mapped[list["SleepEntry"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
