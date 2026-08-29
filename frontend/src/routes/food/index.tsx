@@ -53,6 +53,18 @@ function blankForm(): FormState {
   };
 }
 
+// Tinted badge per meal — alternating brand/accent so the list scans quickly.
+const MEAL_BADGE: Record<string, string> = {
+  breakfast: "bg-brand-100 text-brand-800",
+  lunch: "bg-accent-100 text-accent-800",
+  dinner: "bg-brand-100 text-brand-800",
+  snack: "bg-accent-100 text-accent-800",
+};
+
+const labelClass = "block text-sm font-medium text-slate-700";
+const inputClass =
+  "mt-1.5 block w-full rounded-lg border-0 bg-white px-3.5 py-2.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 transition placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500";
+
 export default component$(() => {
   const nav = useNavigate();
   // Auth gate: null until checked. We render nothing app-related until the
@@ -177,209 +189,381 @@ export default component$(() => {
 
   // Hold the whole page until auth resolves so protected content can't flash
   // before a redirect.
-  if (!authChecked.value) return <p>Loading...</p>;
+  if (!authChecked.value) {
+    return (
+      <main class="flex min-h-screen items-center justify-center">
+        <p class="text-sm text-slate-500">Loading…</p>
+      </main>
+    );
+  }
 
   return (
-    <main>
-      <header>
-        <h1>Food Log</h1>
-        <p>
-          Signed in as{" "}
-          <strong>{authUser.value?.display_name || authUser.value?.email}</strong>{" "}
-          <button type="button" onClick$={doLogout}>
-            Log out
-          </button>
-        </p>
+    <div class="min-h-screen">
+      {/* Top bar */}
+      <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur">
+        <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3.5">
+          <div class="flex items-center gap-2.5">
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 text-sm font-bold text-white shadow-sm">
+              H
+            </span>
+            <span class="text-base font-semibold tracking-tight text-slate-900">
+              Food Log
+            </span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="hidden text-sm text-slate-500 sm:inline">
+              Signed in as{" "}
+              <span class="font-medium text-slate-700">
+                {authUser.value?.display_name || authUser.value?.email}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick$={doLogout}
+              class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-slate-50 hover:text-slate-900"
+            >
+              Log out
+            </button>
+          </div>
+        </div>
       </header>
 
-      <p>
-        <label>
-          Date{" "}
-          <input
-            type="date"
-            value={selectedDate.value}
-            onChange$={(_, el) => (selectedDate.value = el.value)}
-          />
-        </label>
-      </p>
+      <main class="mx-auto max-w-5xl px-6 py-8">
+        {/* Date selector */}
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900">
+              Your day
+            </h1>
+            <p class="mt-0.5 text-sm text-slate-500">
+              Track what you eat and watch your macros add up.
+            </p>
+          </div>
+          <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+            Date
+            <input
+              type="date"
+              value={selectedDate.value}
+              onChange$={(_, el) => (selectedDate.value = el.value)}
+              class="rounded-lg border-0 bg-white px-3 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
+            />
+          </label>
+        </div>
 
-      <section aria-labelledby="form-heading">
-        <h2 id="form-heading">
-          {editingId.value !== null ? "Edit entry" : "Add an entry"}
-        </h2>
-
-        {formError.value && <p role="alert">{formError.value}</p>}
-
-        <form
-          preventdefault:submit
-          onSubmit$={submit}
-        >
-          <p>
-            <label>
-              Food name
-              <input
-                type="text"
-                required
-                value={form.food_name}
-                onInput$={(_, el) => (form.food_name = el.value)}
-              />
-            </label>
-          </p>
-
-          <p>
-            <label>
-              Meal
-              <select
-                value={form.meal_category}
-                onChange$={(_, el) =>
-                  (form.meal_category = el.value as MealCategory)
-                }
-              >
-                {MEAL_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </p>
-
-          <p>
-            <label>
-              Serving (optional)
-              <input
-                type="text"
-                value={form.serving_description}
-                onInput$={(_, el) => (form.serving_description = el.value)}
-              />
-            </label>
-          </p>
-
-          <p>
-            <label>
-              Calories
-              <input
-                type="number"
-                required
-                min="0"
-                step="1"
-                value={form.calories}
-                onInput$={(_, el) => (form.calories = el.value)}
-              />
-            </label>
-          </p>
-
-          <p>
-            <label>
-              Protein (g)
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={form.protein_g}
-                onInput$={(_, el) => (form.protein_g = el.value)}
-              />
-            </label>
-          </p>
-
-          <p>
-            <label>
-              Carbs (g)
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={form.carb_g}
-                onInput$={(_, el) => (form.carb_g = el.value)}
-              />
-            </label>
-          </p>
-
-          <p>
-            <label>
-              Fat (g)
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={form.fat_g}
-                onInput$={(_, el) => (form.fat_g = el.value)}
-              />
-            </label>
-          </p>
-
-          <p>
-            <label>
-              Notes (optional)
-              <textarea
-                value={form.notes}
-                onInput$={(_, el) => (form.notes = el.value)}
-              />
-            </label>
-          </p>
-
-          <p>
-            <button type="submit" disabled={submitting.value}>
-              {submitting.value
-                ? "Saving..."
-                : editingId.value !== null
-                  ? "Save changes"
-                  : "Add entry"}
-            </button>
-            {editingId.value !== null && (
-              <button type="button" disabled={submitting.value} onClick$={resetForm}>
-                Cancel
-              </button>
-            )}
-          </p>
-        </form>
-      </section>
-
-      <section aria-labelledby="list-heading">
-        <h2 id="list-heading">Entries for {selectedDate.value || "today"}</h2>
-
-        {listLoading.value && <p>Loading...</p>}
-        {listError.value && <p role="alert">{listError.value}</p>}
-
-        {!listLoading.value && !listError.value && entries.length === 0 && (
-          <p>No entries yet for this day. Add your first one above.</p>
+        {/* Totals summary */}
+        {totals && entries.length > 0 && (
+          <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Calories" value={`${totals.calories}`} unit="kcal" accent />
+            <StatCard label="Protein" value={totals.protein_g} unit="g" />
+            <StatCard label="Carbs" value={totals.carb_g} unit="g" />
+            <StatCard label="Fat" value={totals.fat_g} unit="g" />
+          </div>
         )}
 
-        {entries.length > 0 && (
-          <>
-            <ul>
-              {entries.map((entry) => (
-                <li key={entry.id}>
-                  <strong>{entry.food_name}</strong> ({entry.meal_category})
-                  {entry.serving_description ? ` — ${entry.serving_description}` : ""}
-                  <br />
-                  {entry.calories} kcal · P {entry.protein_g}g · C {entry.carb_g}g · F{" "}
-                  {entry.fat_g}g
-                  {entry.notes ? <div>Notes: {entry.notes}</div> : null}
-                  <div>
-                    <button type="button" onClick$={() => startEdit(entry)}>
-                      Edit
-                    </button>
-                    <button type="button" onClick$={() => remove(entry.id)}>
-                      Delete
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+        <div class="grid gap-8 lg:grid-cols-[minmax(0,22rem)_1fr]">
+          {/* Form */}
+          <section
+            aria-labelledby="form-heading"
+            class="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 lg:sticky lg:top-24"
+          >
+            <h2
+              id="form-heading"
+              class="text-lg font-semibold tracking-tight text-slate-900"
+            >
+              {editingId.value !== null ? "Edit entry" : "Add an entry"}
+            </h2>
+            <p class="mt-0.5 text-sm text-slate-500">
+              {editingId.value !== null
+                ? "Update the details below."
+                : "Log a food and its macros."}
+            </p>
 
-            {totals && (
-              <p>
-                <strong>Daily totals:</strong> {totals.calories} kcal · P{" "}
-                {totals.protein_g}g · C {totals.carb_g}g · F {totals.fat_g}g
+            {formError.value && (
+              <p
+                role="alert"
+                class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700"
+              >
+                {formError.value}
               </p>
             )}
-          </>
-        )}
-      </section>
-    </main>
+
+            <form preventdefault:submit onSubmit$={submit} class="mt-5 space-y-4">
+              <div>
+                <label class={labelClass}>
+                  Food name
+                  <input
+                    type="text"
+                    required
+                    class={inputClass}
+                    value={form.food_name}
+                    onInput$={(_, el) => (form.food_name = el.value)}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label class={labelClass}>
+                  Meal
+                  <select
+                    class={inputClass}
+                    value={form.meal_category}
+                    onChange$={(_, el) =>
+                      (form.meal_category = el.value as MealCategory)
+                    }
+                  >
+                    {MEAL_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div>
+                <label class={labelClass}>
+                  Serving{" "}
+                  <span class="font-normal text-slate-400">(optional)</span>
+                  <input
+                    type="text"
+                    class={inputClass}
+                    value={form.serving_description}
+                    onInput$={(_, el) => (form.serving_description = el.value)}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label class={labelClass}>
+                  Calories
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="1"
+                    class={inputClass}
+                    value={form.calories}
+                    onInput$={(_, el) => (form.calories = el.value)}
+                  />
+                </label>
+              </div>
+
+              <div class="grid grid-cols-3 gap-3">
+                <label class={labelClass}>
+                  Protein
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    class={inputClass}
+                    value={form.protein_g}
+                    onInput$={(_, el) => (form.protein_g = el.value)}
+                  />
+                </label>
+                <label class={labelClass}>
+                  Carbs
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    class={inputClass}
+                    value={form.carb_g}
+                    onInput$={(_, el) => (form.carb_g = el.value)}
+                  />
+                </label>
+                <label class={labelClass}>
+                  Fat
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    class={inputClass}
+                    value={form.fat_g}
+                    onInput$={(_, el) => (form.fat_g = el.value)}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label class={labelClass}>
+                  Notes{" "}
+                  <span class="font-normal text-slate-400">(optional)</span>
+                  <textarea
+                    rows={2}
+                    class={inputClass}
+                    value={form.notes}
+                    onInput$={(_, el) => (form.notes = el.value)}
+                  />
+                </label>
+              </div>
+
+              <div class="flex gap-3 pt-1">
+                <button
+                  type="submit"
+                  disabled={submitting.value}
+                  class="flex flex-1 items-center justify-center rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting.value
+                    ? "Saving…"
+                    : editingId.value !== null
+                      ? "Save changes"
+                      : "Add entry"}
+                </button>
+                {editingId.value !== null && (
+                  <button
+                    type="button"
+                    disabled={submitting.value}
+                    onClick$={resetForm}
+                    class="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+
+          {/* Entries list */}
+          <section aria-labelledby="list-heading">
+            <h2
+              id="list-heading"
+              class="mb-4 text-lg font-semibold tracking-tight text-slate-900"
+            >
+              Entries for {selectedDate.value || "today"}
+            </h2>
+
+            {listLoading.value && (
+              <p class="text-sm text-slate-500">Loading…</p>
+            )}
+            {listError.value && (
+              <p
+                role="alert"
+                class="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700"
+              >
+                {listError.value}
+              </p>
+            )}
+
+            {!listLoading.value && !listError.value && entries.length === 0 && (
+              <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-14 text-center">
+                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-2xl">
+                  🍽️
+                </div>
+                <p class="mt-4 text-sm font-medium text-slate-900">
+                  No entries yet for this day
+                </p>
+                <p class="mt-1 text-sm text-slate-500">
+                  Add your first one using the form.
+                </p>
+              </div>
+            )}
+
+            {entries.length > 0 && (
+              <ul class="space-y-3">
+                {entries.map((entry) => (
+                  <li
+                    key={entry.id}
+                    class="group rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md"
+                  >
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h3 class="font-semibold text-slate-900">
+                            {entry.food_name}
+                          </h3>
+                          <span
+                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MEAL_BADGE[entry.meal_category] ?? "bg-slate-100 text-slate-700"}`}
+                          >
+                            {entry.meal_category}
+                          </span>
+                        </div>
+                        {entry.serving_description && (
+                          <p class="mt-0.5 text-sm text-slate-500">
+                            {entry.serving_description}
+                          </p>
+                        )}
+                      </div>
+                      <div class="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick$={() => startEdit(entry)}
+                          class="rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick$={() => remove(entry.id)}
+                          class="rounded-md px-2.5 py-1 text-xs font-medium text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                      <span class="font-semibold text-slate-900">
+                        {entry.calories}{" "}
+                        <span class="font-normal text-slate-400">kcal</span>
+                      </span>
+                      <span class="text-slate-600">
+                        P <span class="font-medium">{entry.protein_g}g</span>
+                      </span>
+                      <span class="text-slate-600">
+                        C <span class="font-medium">{entry.carb_g}g</span>
+                      </span>
+                      <span class="text-slate-600">
+                        F <span class="font-medium">{entry.fat_g}g</span>
+                      </span>
+                    </div>
+
+                    {entry.notes && (
+                      <p class="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        {entry.notes}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+});
+
+// Compact macro/calorie summary tile.
+const StatCard = component$<{
+  label: string;
+  value: string;
+  unit: string;
+  accent?: boolean;
+}>(({ label, value, unit, accent }) => {
+  return (
+    <div
+      class={`rounded-xl p-4 shadow-sm ring-1 ${
+        accent
+          ? "bg-gradient-to-br from-brand-600 to-accent-600 text-white ring-transparent"
+          : "bg-white text-slate-900 ring-slate-200"
+      }`}
+    >
+      <p
+        class={`text-xs font-medium uppercase tracking-wide ${accent ? "text-white/80" : "text-slate-500"}`}
+      >
+        {label}
+      </p>
+      <p class="mt-1 text-2xl font-bold tracking-tight">
+        {value}
+        <span
+          class={`ml-1 text-sm font-normal ${accent ? "text-white/70" : "text-slate-400"}`}
+        >
+          {unit}
+        </span>
+      </p>
+    </div>
   );
 });

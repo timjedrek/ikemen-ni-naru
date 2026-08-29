@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/**
+ * Design tokens (green + purple theme).
+ * Emerald is the primary action color; violet is the accent. Slate carries the
+ * neutral text/background hierarchy. Referencing these via Tailwind utilities
+ * (bg-brand-600, text-accent-500, etc.) keeps the palette consistent.
+ */
+@theme {
+  --color-brand-50: oklch(0.979 0.021 166);
+  --color-brand-100: oklch(0.95 0.052 163);
+  --color-brand-200: oklch(0.905 0.093 164);
+  --color-brand-300: oklch(0.845 0.143 164);
+  --color-brand-400: oklch(0.765 0.177 163);
+  --color-brand-500: oklch(0.696 0.17 162);
+  --color-brand-600: oklch(0.596 0.145 163);
+  --color-brand-700: oklch(0.508 0.118 165);
+  --color-brand-800: oklch(0.432 0.095 166);
+  --color-brand-900: oklch(0.378 0.077 168);
+
+  --color-accent-50: oklch(0.977 0.014 308);
+  --color-accent-100: oklch(0.946 0.033 307);
+  --color-accent-200: oklch(0.902 0.063 306);
+  --color-accent-300: oklch(0.827 0.119 306);
+  --color-accent-400: oklch(0.714 0.203 305);
+  --color-accent-500: oklch(0.627 0.265 304);
+  --color-accent-600: oklch(0.558 0.288 303);
+  --color-accent-700: oklch(0.496 0.265 302);
+  --color-accent-800: oklch(0.438 0.218 303);
+  --color-accent-900: oklch(0.381 0.176 304);
+}
+
+/* A soft brand-tinted page backdrop — never pure white (Refactoring UI). */
+body {
+  @apply bg-slate-50 text-slate-700 antialiased;
+  background-image:
+    radial-gradient(
+      60rem 60rem at 110% -10%,
+      var(--color-accent-100) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      50rem 50rem at -10% 0%,
+      var(--color-brand-100) 0%,
+      transparent 50%
+    );
+  background-attachment: fixed;
+  min-height: 100vh;
+}
