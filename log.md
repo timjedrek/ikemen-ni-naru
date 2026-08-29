@@ -5,6 +5,37 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Phase 4: database foundation (SQLAlchemy + Alembic + first schema)
+
+**Goal:** stop having no persistence; wire the ORM, migrations, and the first
+tables (`users`, `food_entries`) so Phase 5 can build the food vertical slice.
+
+**Built**
+- `backend/app/database/`: `base.py` (`Base(DeclarativeBase)` + `TimestampMixin`
+  with server-side `now()` UTC `created_at`/`updated_at`), `session.py` (sync
+  `engine` with `pool_pre_ping`, `SessionLocal` factory, `get_db()` request
+  dependency: open → yield → commit/rollback → close).
+- `backend/app/models/`: `User` and `FoodEntry`. `__init__.py` imports both so
+  they register on `Base.metadata`.
+- Alembic: `alembic init alembic`; `env.py` sets `sqlalchemy.url` from
+  `settings.database_url` and points `target_metadata` at `Base.metadata`
+  (imports `app.models` for the side effect). URL removed from `alembic.ini`.
+- First migration `9ac5c800f158_create_users_and_food_entries`.
+
+**Decisions**
+- Sync SQLAlchemy (not async) — simpler to learn/debug, fine for this load.
+- Only `users` + `food_entries` this phase; weight/mood/sleep deferred to Phase 7.
+- User deletion → `ON DELETE CASCADE` (personal, per-user private data).
+- Macros as `Numeric(6,2)`, calories `Integer`; non-negativity as DB `CHECK`
+  constraints; unique index on (normalized) `email`.
+
+**Verified:** `upgrade head` builds all tables; `downgrade base` drops them
+cleanly; re-upgrade works. Constraints reject bad data (duplicate email, orphan
+FK, negative calories) and accept valid rows. Cascade confirmed: deleting a user
+removed their food entries. App + db modules import cleanly.
+
+---
+
 ## 2026-08-23 — Phase 3: environment config + Dockerized Postgres
 
 **Goal:** stop hard-coding settings; get a real database running locally.
