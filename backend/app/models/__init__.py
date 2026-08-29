@@ -6,6 +6,7 @@ sees the full schema.
 """
 
 from app.models.food_entry import FoodEntry
+from app.models.session import Session
 from app.models.user import User
 
-__all__ = ["FoodEntry", "User"]
+__all__ = ["FoodEntry", "Session", "User"]

@@ -1,14 +1,9 @@
 """Persistence operations for food entries (buildplan Step 22).
 
-Every operation is scoped to a single owner. Today that owner is always the
-seeded dev user (see app.core.temp_owner) because authentication does not exist
-yet — but the owner is passed in as `user_id` rather than read from the constant
-here, so Phase 6 only has to change the *callers* (the routes) to pass the
-authenticated user's id. Nothing in this module assumes the temporary design.
-
-Ownership scoping is applied on every read/update/delete: an entry that belongs
-to a different user is treated as if it does not exist (returns None), which is
-exactly the behavior we want once multiple users exist.
+Every operation is scoped to a single owner, passed in as `user_id` (the routes
+supply the authenticated user's id). Ownership scoping is applied on every
+read/update/delete: an entry that belongs to a different user is treated as if
+it does not exist (returns None), which enforces per-user isolation.
 """
 
 from datetime import date

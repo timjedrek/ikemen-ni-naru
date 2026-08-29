@@ -7,6 +7,7 @@ from app.database.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.food_entry import FoodEntry
+    from app.models.session import Session
 
 
 class User(Base, TimestampMixin):
@@ -28,6 +29,13 @@ class User(Base, TimestampMixin):
     # Deleting a user removes their owned records (ON DELETE CASCADE at the DB
     # level via the FK; passive_deletes lets Postgres do the work).
     food_entries: Mapped[list["FoodEntry"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    # Active/expired login sessions; removed with the user (ON DELETE CASCADE).
+    sessions: Mapped[list["Session"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

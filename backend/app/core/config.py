@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 60
 
+    # --- Sessions (Phase 6, opaque-token auth) ---
+    # Cookie name and lifetime for the session token. The cookie is always
+    # HttpOnly + SameSite=Lax; it is marked Secure only outside development so
+    # local http:// dev still works while production requires https.
+    session_cookie_name: str = "session"
+    session_expire_days: int = 14
+
+    @property
+    def cookie_secure(self) -> bool:
+        """Send the session cookie only over HTTPS outside development."""
+        return self.environment != "development"
+
     # --- Database ---
     # No default: must be provided via env, e.g.
     #   postgresql+psycopg://health:health@localhost:5432/health
