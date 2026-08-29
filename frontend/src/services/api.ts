@@ -5,6 +5,24 @@ import type {
   FoodEntryList,
   FoodEntryUpdate,
 } from "~/types/food-entry";
+import type {
+  WeightEntry,
+  WeightEntryCreate,
+  WeightEntryList,
+  WeightEntryUpdate,
+} from "~/types/weight-entry";
+import type {
+  MoodEntry,
+  MoodEntryCreate,
+  MoodEntryList,
+  MoodEntryUpdate,
+} from "~/types/mood-entry";
+import type {
+  SleepEntry,
+  SleepEntryCreate,
+  SleepEntryList,
+  SleepEntryUpdate,
+} from "~/types/sleep-entry";
 
 // Single source of truth for the backend origin, read from the environment
 // (PUBLIC_API_BASE_URL in frontend/.env). Only PUBLIC_-prefixed vars are
@@ -154,4 +172,76 @@ export function updateFoodEntry(
 
 export function deleteFoodEntry(id: number): Promise<void> {
   return apiFetch<void>(`/food-entries/${id}`, { method: "DELETE" });
+}
+
+// --- Weight entries (buildplan Phase 7) ---
+
+export function listWeightEntries(): Promise<WeightEntryList> {
+  return apiFetch<WeightEntryList>("/weight-entries");
+}
+
+export function createWeightEntry(data: WeightEntryCreate): Promise<WeightEntry> {
+  return apiFetch<WeightEntry>("/weight-entries", { method: "POST", json: data });
+}
+
+export function updateWeightEntry(
+  id: number,
+  data: WeightEntryUpdate,
+): Promise<WeightEntry> {
+  return apiFetch<WeightEntry>(`/weight-entries/${id}`, {
+    method: "PATCH",
+    json: data,
+  });
+}
+
+export function deleteWeightEntry(id: number): Promise<void> {
+  return apiFetch<void>(`/weight-entries/${id}`, { method: "DELETE" });
+}
+
+// --- Mood entries (buildplan Phase 7) ---
+
+export function listMoodEntries(): Promise<MoodEntryList> {
+  return apiFetch<MoodEntryList>("/mood-entries");
+}
+
+export function createMoodEntry(data: MoodEntryCreate): Promise<MoodEntry> {
+  return apiFetch<MoodEntry>("/mood-entries", { method: "POST", json: data });
+}
+
+export function updateMoodEntry(
+  id: number,
+  data: MoodEntryUpdate,
+): Promise<MoodEntry> {
+  return apiFetch<MoodEntry>(`/mood-entries/${id}`, {
+    method: "PATCH",
+    json: data,
+  });
+}
+
+export function deleteMoodEntry(id: number): Promise<void> {
+  return apiFetch<void>(`/mood-entries/${id}`, { method: "DELETE" });
+}
+
+// --- Sleep entries (buildplan Phase 7) ---
+
+export function listSleepEntries(): Promise<SleepEntryList> {
+  return apiFetch<SleepEntryList>("/sleep-entries");
+}
+
+export function createSleepEntry(data: SleepEntryCreate): Promise<SleepEntry> {
+  return apiFetch<SleepEntry>("/sleep-entries", { method: "POST", json: data });
+}
+
+export function updateSleepEntry(
+  id: number,
+  data: SleepEntryUpdate,
+): Promise<SleepEntry> {
+  return apiFetch<SleepEntry>(`/sleep-entries/${id}`, {
+    method: "PATCH",
+    json: data,
+  });
+}
+
+export function deleteSleepEntry(id: number): Promise<void> {
+  return apiFetch<void>(`/sleep-entries/${id}`, { method: "DELETE" });
 }
