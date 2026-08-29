@@ -23,7 +23,7 @@ def create_session(db: DbSession, user_id: int, *, ttl_days: int) -> str:
         expires_at=datetime.now(timezone.utc) + timedelta(days=ttl_days),
     )
     db.add(session)
-    db.flush()
+    db.commit()  # durable before the response/cookie is sent (see get_db docstring)
     return token
 
 
@@ -48,5 +48,5 @@ def delete_session(db: DbSession, token: str) -> bool:
     if session is None:
         return False
     db.delete(session)
-    db.flush()
+    db.commit()
     return True

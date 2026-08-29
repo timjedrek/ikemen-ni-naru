@@ -3,6 +3,7 @@ import {
   useSignal,
   useVisibleTask$,
 } from '@builder.io/qwik';
+import { Link } from '@builder.io/qwik-city';
 import { getHealth } from '~/services/api';
 import type { HealthResponse } from '~/types/health';
 
@@ -27,6 +28,11 @@ export default component$(() => {
   return (
     <main>
       <h1>Health Tracker</h1>
+
+      <nav>
+        <Link href="/food">Food log</Link> · <Link href="/login">Log in</Link> ·{" "}
+        <Link href="/register">Register</Link>
+      </nav>
 
       {loading.value && <p>Checking the FastAPI backend...</p>}
 

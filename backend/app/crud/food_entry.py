@@ -19,7 +19,7 @@ def create_food_entry(db: Session, user_id: int, data: FoodEntryCreate) -> FoodE
     """Insert a new entry owned by `user_id` and return the persisted row."""
     entry = FoodEntry(user_id=user_id, **data.model_dump())
     db.add(entry)
-    db.flush()  # assign id / server defaults without ending the request's transaction
+    db.commit()  # durable before the response is built (see get_db docstring)
     db.refresh(entry)
     return entry
 
@@ -106,7 +106,7 @@ def update_food_entry(
         return None
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(entry, field, value)
-    db.flush()
+    db.commit()
     db.refresh(entry)
     return entry
 
@@ -117,5 +117,5 @@ def delete_food_entry(db: Session, user_id: int, entry_id: int) -> bool:
     if entry is None:
         return False
     db.delete(entry)
-    db.flush()
+    db.commit()
     return True

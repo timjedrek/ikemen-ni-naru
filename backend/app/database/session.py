@@ -21,17 +21,23 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def get_db() -> Generator[Session, None, None]:
     """Per-request database session (FastAPI dependency).
 
-    Lifecycle (buildplan Step 16):
+    Commits are the responsibility of the write operations (the CRUD layer),
+    NOT this dependency. FastAPI runs a yield-dependency's teardown *after* the
+    response has been sent, so committing here would land after the client
+    already has its response — a fast follow-up request could then race the
+    commit and not see its own write (this actually bit us: an immediate GET
+    /auth/me after register returned 401 until the commit landed). Committing at
+    the write site guarantees durability before the response is built.
+
+    Lifecycle:
       1. open a session
-      2. yield it to the route/repository
-      3. commit if the request handler returned normally
-      4. roll back if it raised
-      5. always close the session (return the connection to the pool)
+      2. yield it to the route/repository (which commits its own writes)
+      3. roll back if the handler raised (safety net for a half-done unit of work)
+      4. always close the session (return the connection to the pool)
     """
     session = SessionLocal()
     try:
         yield session
-        session.commit()
     except Exception:
         session.rollback()
         raise

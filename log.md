@@ -5,6 +5,51 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Phase 6: authentication and user isolation
+
+**Goal:** real users, per-user data isolation, and a browser-safe session.
+
+**Decision:** opaque server-side sessions (not JWT). A random token in an
+HttpOnly + SameSite=Lax cookie (Secure outside dev); the DB stores only the
+token's SHA-256. Logout = delete the row (instant revocation). Password hashing
+via argon2 (`argon2-cffi`). Chosen over JWT for simplicity + trivial revocation;
+JWTs deferred as a possible later learning exercise.
+
+**Built (backend)**
+- `core/security.py`: argon2 hash/verify, email normalization, `secrets` token
+  gen, SHA-256 token hashing (raw token never stored).
+- `models/session.py` + migration `f62e5ff43d56`: `sessions` (token_hash unique,
+  user_id CASCADE, expires_at).
+- `crud/user.py`, `crud/session.py`; `api/deps.py` `get_current_user` (the one
+  auth gate); `api/routes/auth.py` register/login/logout/me.
+- Food routes now depend on `get_current_user`, scoped by `current_user.id`.
+- **Temp ownership removed** (Step 35): deleted `core/temp_owner.py`, migration
+  `29adbd57d6df` drops the seeded dev user.
+
+**Built (frontend)**
+- `services/api.ts`: `credentials: "include"` on every call (cross-origin cookie),
+  auth calls + `getCurrentUser()` (401 → null).
+- `routes/login`, `routes/register` (pending/error/redirect, bounce
+  already-authed to /food); `/food` guarded (redirect to /login, no data flash)
+  with a logout control; nav links on home.
+
+**Gotcha (cost us real debugging time)**
+- `get_db` committed *after* `yield`. FastAPI runs yield-dependency teardown
+  **after the response is sent**, so register's session row committed only after
+  the browser already had its cookie — an immediate `GET /auth/me` (or /food
+  load) raced the commit and got 401. TestClient hid it (it drives the full
+  request lifecycle synchronously). Fix: `get_db` no longer commits; the CRUD
+  write functions commit explicitly, so writes are durable before the response
+  is built. Confirmed: `/me` immediately after register now 200 (was 401; a 1s
+  sleep also "fixed" it, which is what pinned it to commit timing).
+
+**Verified:** two-account checkpoint over real HTTP (curl, cross-origin) AND
+TestClient — isolation (B can't see/GET/PATCH/DELETE A's entries → 404), logout
+revokes immediately, email normalized, dup → 409, wrong-pw/unknown-user both
+generic 401, short pw → 422. Frontend `tsc` + `qwik build` clean.
+
+---
+
 ## 2026-08-29 — Phase 5: first vertical slice (food entries, end to end)
 
 **Goal:** prove the whole stack hangs together on one feature — Pydantic

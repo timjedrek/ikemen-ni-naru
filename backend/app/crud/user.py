@@ -28,6 +28,6 @@ def create_user(
         display_name=display_name,
     )
     db.add(user)
-    db.flush()
+    db.commit()  # durable before the response is built (see get_db docstring)
     db.refresh(user)
     return user

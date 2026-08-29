@@ -62,6 +62,10 @@ export async function apiFetch<T>(
   const { json, headers, ...rest } = init ?? {};
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
+    // Send/receive the HttpOnly session cookie on every call. Required because
+    // the browser (:5173) and API (:8000) are different origins, so cookies are
+    // only attached when credentials are explicitly included.
+    credentials: "include",
     headers:
       json !== undefined
         ? { "Content-Type": "application/json", ...headers }
@@ -84,6 +88,47 @@ export async function apiFetch<T>(
 
 export function getHealth(): Promise<HealthResponse> {
   return apiFetch<HealthResponse>("/health");
+}
+
+// --- Auth (buildplan Phase 6) ---
+
+export type User = {
+  id: number;
+  email: string;
+  display_name: string | null;
+  timezone: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+export function register(data: {
+  email: string;
+  password: string;
+  display_name?: string;
+}): Promise<User> {
+  return apiFetch<User>("/auth/register", { method: "POST", json: data });
+}
+
+export function login(data: {
+  email: string;
+  password: string;
+}): Promise<User> {
+  return apiFetch<User>("/auth/login", { method: "POST", json: data });
+}
+
+export function logout(): Promise<void> {
+  return apiFetch<void>("/auth/logout", { method: "POST" });
+}
+
+// Returns the current user, or null if not authenticated (401). Other errors
+// still throw, so callers can distinguish "logged out" from "server down".
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    return await apiFetch<User>("/auth/me");
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) return null;
+    throw err;
+  }
 }
 
 // --- Food entries (buildplan Phase 5) ---

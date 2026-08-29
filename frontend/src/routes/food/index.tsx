@@ -1,10 +1,14 @@
 import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
+import { useNavigate } from "@builder.io/qwik-city";
 import {
   ApiError,
   createFoodEntry,
   deleteFoodEntry,
+  getCurrentUser,
   listFoodEntries,
+  logout,
   updateFoodEntry,
+  type User,
 } from "~/services/api";
 import {
   MEAL_CATEGORIES,
@@ -50,6 +54,12 @@ function blankForm(): FormState {
 }
 
 export default component$(() => {
+  const nav = useNavigate();
+  // Auth gate: null until checked. We render nothing app-related until the
+  // check resolves, so protected data never flashes before a possible redirect.
+  const authUser = useSignal<User | null>(null);
+  const authChecked = useSignal(false);
+
   const selectedDate = useSignal("");
   const data = useSignal<FoodEntryList | null>(null);
   const listError = useSignal<string | null>(null);
@@ -73,15 +83,33 @@ export default component$(() => {
     }
   });
 
-  // Default to today on first client render, then (re)load whenever the
-  // selected date changes. Client-only to avoid an SSR/local-time mismatch.
-  useVisibleTask$(({ track }) => {
-    const date = track(() => selectedDate.value);
-    if (!date) {
-      selectedDate.value = todayIso();
+  // Route protection (buildplan Step 34): confirm a valid session before
+  // showing anything. Unauthenticated → redirect to login. This is a usability
+  // guard; the backend remains the real security boundary (every API call is
+  // independently authenticated).
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(async () => {
+    const user = await getCurrentUser();
+    if (!user) {
+      await nav("/login");
       return;
     }
+    authUser.value = user;
+    authChecked.value = true;
+    selectedDate.value = todayIso(); // triggers the load task below
+  });
+
+  // Reload whenever the selected date changes — but only once authenticated.
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(({ track }) => {
+    const date = track(() => selectedDate.value);
+    if (!authChecked.value || !date) return;
     reload();
+  });
+
+  const doLogout = $(async () => {
+    await logout();
+    await nav("/login");
   });
 
   const resetForm = $(() => {
@@ -147,9 +175,22 @@ export default component$(() => {
   const totals = data.value?.totals;
   const entries = data.value?.items ?? [];
 
+  // Hold the whole page until auth resolves so protected content can't flash
+  // before a redirect.
+  if (!authChecked.value) return <p>Loading...</p>;
+
   return (
     <main>
-      <h1>Food Log</h1>
+      <header>
+        <h1>Food Log</h1>
+        <p>
+          Signed in as{" "}
+          <strong>{authUser.value?.display_name || authUser.value?.email}</strong>{" "}
+          <button type="button" onClick$={doLogout}>
+            Log out
+          </button>
+        </p>
+      </header>
 
       <p>
         <label>
