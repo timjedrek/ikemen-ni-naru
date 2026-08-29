@@ -1,5 +1,7 @@
 import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
 import { useNavigate } from "@builder.io/qwik-city";
+import { LogoMark } from "~/components/logo/logo";
+import { ThemeToggle } from "~/components/theme-toggle/theme-toggle";
 import {
   ApiError,
   createFoodEntry,
@@ -55,15 +57,15 @@ function blankForm(): FormState {
 
 // Tinted badge per meal — alternating brand/accent so the list scans quickly.
 const MEAL_BADGE: Record<string, string> = {
-  breakfast: "bg-brand-100 text-brand-800",
-  lunch: "bg-accent-100 text-accent-800",
-  dinner: "bg-brand-100 text-brand-800",
-  snack: "bg-accent-100 text-accent-800",
+  breakfast: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
+  lunch: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
+  dinner: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
+  snack: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
 };
 
-const labelClass = "block text-sm font-medium text-slate-700";
+const labelClass = "block text-sm font-medium text-foreground";
 const inputClass =
-  "mt-1.5 block w-full rounded-lg border-0 bg-white px-3.5 py-2.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 transition placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500";
+  "mt-1.5 block w-full rounded-lg border-0 bg-surface px-3.5 py-2.5 text-foreground shadow-sm ring-1 ring-inset ring-line-strong transition placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500";
 
 export default component$(() => {
   const nav = useNavigate();
@@ -192,7 +194,7 @@ export default component$(() => {
   if (!authChecked.value) {
     return (
       <main class="flex min-h-screen items-center justify-center">
-        <p class="text-sm text-slate-500">Loading…</p>
+        <p class="text-sm text-muted">Loading…</p>
       </main>
     );
   }
@@ -200,27 +202,26 @@ export default component$(() => {
   return (
     <div class="min-h-screen">
       {/* Top bar */}
-      <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur">
+      <header class="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur">
         <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3.5">
           <div class="flex items-center gap-2.5">
-            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 text-sm font-bold text-white shadow-sm">
-              H
-            </span>
-            <span class="text-base font-semibold tracking-tight text-slate-900">
+            <LogoMark class="h-8 w-8" />
+            <span class="text-base font-semibold tracking-tight text-foreground">
               Food Log
             </span>
           </div>
           <div class="flex items-center gap-3">
-            <span class="hidden text-sm text-slate-500 sm:inline">
+            <span class="hidden text-sm text-muted sm:inline">
               Signed in as{" "}
-              <span class="font-medium text-slate-700">
+              <span class="font-medium text-foreground">
                 {authUser.value?.display_name || authUser.value?.email}
               </span>
             </span>
+            <ThemeToggle />
             <button
               type="button"
               onClick$={doLogout}
-              class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-slate-50 hover:text-slate-900"
+              class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
             >
               Log out
             </button>
@@ -232,20 +233,20 @@ export default component$(() => {
         {/* Date selector */}
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 class="text-2xl font-bold tracking-tight text-slate-900">
+            <h1 class="text-2xl font-bold tracking-tight text-foreground">
               Your day
             </h1>
-            <p class="mt-0.5 text-sm text-slate-500">
+            <p class="mt-0.5 text-sm text-muted">
               Track what you eat and watch your macros add up.
             </p>
           </div>
-          <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <label class="flex items-center gap-2 text-sm font-medium text-foreground">
             Date
             <input
               type="date"
               value={selectedDate.value}
               onChange$={(_, el) => (selectedDate.value = el.value)}
-              class="rounded-lg border-0 bg-white px-3 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
+              class="rounded-lg border-0 bg-surface px-3 py-2 text-foreground shadow-sm ring-1 ring-inset ring-line-strong focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
             />
           </label>
         </div>
@@ -264,15 +265,15 @@ export default component$(() => {
           {/* Form */}
           <section
             aria-labelledby="form-heading"
-            class="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 lg:sticky lg:top-24"
+            class="h-fit rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-line lg:sticky lg:top-24"
           >
             <h2
               id="form-heading"
-              class="text-lg font-semibold tracking-tight text-slate-900"
+              class="text-lg font-semibold tracking-tight text-foreground"
             >
               {editingId.value !== null ? "Edit entry" : "Add an entry"}
             </h2>
-            <p class="mt-0.5 text-sm text-slate-500">
+            <p class="mt-0.5 text-sm text-muted">
               {editingId.value !== null
                 ? "Update the details below."
                 : "Log a food and its macros."}
@@ -281,7 +282,7 @@ export default component$(() => {
             {formError.value && (
               <p
                 role="alert"
-                class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700"
+                class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
               >
                 {formError.value}
               </p>
@@ -323,7 +324,7 @@ export default component$(() => {
               <div>
                 <label class={labelClass}>
                   Serving{" "}
-                  <span class="font-normal text-slate-400">(optional)</span>
+                  <span class="font-normal text-subtle">(optional)</span>
                   <input
                     type="text"
                     class={inputClass}
@@ -390,7 +391,7 @@ export default component$(() => {
               <div>
                 <label class={labelClass}>
                   Notes{" "}
-                  <span class="font-normal text-slate-400">(optional)</span>
+                  <span class="font-normal text-subtle">(optional)</span>
                   <textarea
                     rows={2}
                     class={inputClass}
@@ -417,7 +418,7 @@ export default component$(() => {
                     type="button"
                     disabled={submitting.value}
                     onClick$={resetForm}
-                    class="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-slate-50"
+                    class="rounded-lg px-4 py-2.5 text-sm font-semibold text-muted ring-1 ring-line transition-colors hover:bg-surface-muted"
                   >
                     Cancel
                   </button>
@@ -430,32 +431,30 @@ export default component$(() => {
           <section aria-labelledby="list-heading">
             <h2
               id="list-heading"
-              class="mb-4 text-lg font-semibold tracking-tight text-slate-900"
+              class="mb-4 text-lg font-semibold tracking-tight text-foreground"
             >
               Entries for {selectedDate.value || "today"}
             </h2>
 
-            {listLoading.value && (
-              <p class="text-sm text-slate-500">Loading…</p>
-            )}
+            {listLoading.value && <p class="text-sm text-muted">Loading…</p>}
             {listError.value && (
               <p
                 role="alert"
-                class="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700"
+                class="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
               >
                 {listError.value}
               </p>
             )}
 
             {!listLoading.value && !listError.value && entries.length === 0 && (
-              <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 px-6 py-14 text-center">
-                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-2xl">
+              <div class="rounded-2xl border border-dashed border-line bg-surface/50 px-6 py-14 text-center">
+                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-2xl dark:bg-brand-500/15">
                   🍽️
                 </div>
-                <p class="mt-4 text-sm font-medium text-slate-900">
+                <p class="mt-4 text-sm font-medium text-foreground">
                   No entries yet for this day
                 </p>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-muted">
                   Add your first one using the form.
                 </p>
               </div>
@@ -466,22 +465,22 @@ export default component$(() => {
                 {entries.map((entry) => (
                   <li
                     key={entry.id}
-                    class="group rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md"
+                    class="group rounded-xl bg-surface p-4 shadow-sm ring-1 ring-line transition hover:shadow-md"
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                          <h3 class="font-semibold text-slate-900">
+                          <h3 class="font-semibold text-foreground">
                             {entry.food_name}
                           </h3>
                           <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MEAL_BADGE[entry.meal_category] ?? "bg-slate-100 text-slate-700"}`}
+                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MEAL_BADGE[entry.meal_category] ?? "bg-surface-muted text-muted"}`}
                           >
                             {entry.meal_category}
                           </span>
                         </div>
                         {entry.serving_description && (
-                          <p class="mt-0.5 text-sm text-slate-500">
+                          <p class="mt-0.5 text-sm text-muted">
                             {entry.serving_description}
                           </p>
                         )}
@@ -490,14 +489,14 @@ export default component$(() => {
                         <button
                           type="button"
                           onClick$={() => startEdit(entry)}
-                          class="rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                          class="rounded-md px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
                           onClick$={() => remove(entry.id)}
-                          class="rounded-md px-2.5 py-1 text-xs font-medium text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50"
+                          class="rounded-md px-2.5 py-1 text-xs font-medium text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-400 dark:ring-red-900/50 dark:hover:bg-red-950/40"
                         >
                           Delete
                         </button>
@@ -505,23 +504,23 @@ export default component$(() => {
                     </div>
 
                     <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                      <span class="font-semibold text-slate-900">
+                      <span class="font-semibold text-foreground">
                         {entry.calories}{" "}
-                        <span class="font-normal text-slate-400">kcal</span>
+                        <span class="font-normal text-subtle">kcal</span>
                       </span>
-                      <span class="text-slate-600">
+                      <span class="text-muted">
                         P <span class="font-medium">{entry.protein_g}g</span>
                       </span>
-                      <span class="text-slate-600">
+                      <span class="text-muted">
                         C <span class="font-medium">{entry.carb_g}g</span>
                       </span>
-                      <span class="text-slate-600">
+                      <span class="text-muted">
                         F <span class="font-medium">{entry.fat_g}g</span>
                       </span>
                     </div>
 
                     {entry.notes && (
-                      <p class="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      <p class="mt-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">
                         {entry.notes}
                       </p>
                     )}
@@ -548,18 +547,18 @@ const StatCard = component$<{
       class={`rounded-xl p-4 shadow-sm ring-1 ${
         accent
           ? "bg-gradient-to-br from-brand-600 to-accent-600 text-white ring-transparent"
-          : "bg-white text-slate-900 ring-slate-200"
+          : "bg-surface text-foreground ring-line"
       }`}
     >
       <p
-        class={`text-xs font-medium uppercase tracking-wide ${accent ? "text-white/80" : "text-slate-500"}`}
+        class={`text-xs font-medium uppercase tracking-wide ${accent ? "text-white/80" : "text-muted"}`}
       >
         {label}
       </p>
       <p class="mt-1 text-2xl font-bold tracking-tight">
         {value}
         <span
-          class={`ml-1 text-sm font-normal ${accent ? "text-white/70" : "text-slate-400"}`}
+          class={`ml-1 text-sm font-normal ${accent ? "text-white/70" : "text-subtle"}`}
         >
           {unit}
         </span>

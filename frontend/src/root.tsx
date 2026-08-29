@@ -16,6 +16,11 @@ export default component$(() => {
     <QwikCityProvider>
       <head>
         <meta charset="utf-8" />
+        {/* Apply the saved (or system) theme before first paint to avoid a
+            flash of the wrong theme. Runs synchronously in <head>. */}
+        <script
+          dangerouslySetInnerHTML={`(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();`}
+        />
         {!isDev && (
           <link
             rel="manifest"

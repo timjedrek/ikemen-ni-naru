@@ -4,6 +4,8 @@ import {
   useVisibleTask$,
 } from '@builder.io/qwik';
 import { Link } from '@builder.io/qwik-city';
+import { Logo } from '~/components/logo/logo';
+import { ThemeToggle } from '~/components/theme-toggle/theme-toggle';
 import { getHealth } from '~/services/api';
 import type { HealthResponse } from '~/types/health';
 
@@ -26,20 +28,17 @@ export default component$(() => {
   });
 
   return (
-    <main class="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-16">
-      <div class="mb-3 flex items-center gap-3">
-        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 text-lg font-bold text-white shadow-sm">
-          H
-        </span>
-        <span class="text-sm font-medium uppercase tracking-widest text-accent-600">
-          Ikemen ni Naru
-        </span>
+    <main class="relative mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-16">
+      <div class="absolute right-6 top-6">
+        <ThemeToggle />
       </div>
 
-      <h1 class="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+      <Logo class="mb-5 h-32 w-auto self-start" />
+
+      <h1 class="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
         Health Tracker
       </h1>
-      <p class="mt-4 max-w-lg text-lg text-slate-500">
+      <p class="mt-4 max-w-lg text-lg text-muted">
         Log your meals, track your macros, and keep an eye on the numbers that
         matter — one day at a time.
       </p>
@@ -53,13 +52,13 @@ export default component$(() => {
         </Link>
         <Link
           href="/login"
-          class="inline-flex items-center rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
         >
           Log in
         </Link>
         <Link
           href="/register"
-          class="inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+          class="inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-semibold text-accent-600 transition-colors hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
         >
           Create account
         </Link>
@@ -67,35 +66,37 @@ export default component$(() => {
 
       <div class="mt-12">
         {loading.value && (
-          <div class="flex items-center gap-2 text-sm text-slate-500">
-            <span class="h-2 w-2 animate-pulse rounded-full bg-slate-400" />
+          <div class="flex items-center gap-2 text-sm text-muted">
+            <span class="h-2 w-2 animate-pulse rounded-full bg-subtle" />
             Checking the FastAPI backend…
           </div>
         )}
 
         {error.value && (
-          <section class="rounded-xl border border-red-200 bg-red-50 p-4">
-            <h2 class="flex items-center gap-2 text-sm font-semibold text-red-800">
+          <section class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/40">
+            <h2 class="flex items-center gap-2 text-sm font-semibold text-red-800 dark:text-red-300">
               <span class="h-2 w-2 rounded-full bg-red-500" />
               Backend connection failed
             </h2>
-            <p class="mt-1 text-sm text-red-700">{error.value}</p>
+            <p class="mt-1 text-sm text-red-700 dark:text-red-400">
+              {error.value}
+            </p>
           </section>
         )}
 
         {health.value && (
-          <section class="rounded-xl border border-brand-200 bg-white/70 p-4 shadow-sm backdrop-blur">
-            <h2 class="flex items-center gap-2 text-sm font-semibold text-brand-800">
+          <section class="rounded-xl border border-brand-200 bg-surface/70 p-4 shadow-sm backdrop-blur dark:border-brand-500/30">
+            <h2 class="flex items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-300">
               <span class="h-2 w-2 rounded-full bg-brand-500" />
               Backend connection successful
             </h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-muted">
               API status:{' '}
-              <strong class="font-semibold text-slate-900">
+              <strong class="font-semibold text-foreground">
                 {health.value.status ?? 'Unknown'}
               </strong>
             </p>
-            <pre class="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs leading-relaxed text-slate-100">
+            <pre class="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs leading-relaxed text-slate-100 dark:bg-slate-950 dark:ring-1 dark:ring-white/10">
               {JSON.stringify(health.value, null, 2)}
             </pre>
           </section>

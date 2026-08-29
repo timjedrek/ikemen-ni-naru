@@ -1,10 +1,18 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: toggled by adding `.dark` to <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /**
  * Design tokens (green + purple theme).
- * Emerald is the primary action color; violet is the accent. Slate carries the
- * neutral text/background hierarchy. Referencing these via Tailwind utilities
- * (bg-brand-600, text-accent-500, etc.) keeps the palette consistent.
+ *
+ * Two layers:
+ *  1. brand/accent — the vivid palette (emerald primary, violet accent). These
+ *     read well on both light and dark surfaces, so they don't change.
+ *  2. Semantic neutrals — surface/foreground/line/etc. These are the ones that
+ *     flip between themes. Markup references them (bg-surface, text-foreground,
+ *     ring-line, …) instead of hard-coded slate/white, so a page needs no
+ *     `dark:` variants for ordinary chrome.
  */
 @theme {
   --color-brand-50: oklch(0.979 0.021 166);
@@ -28,11 +36,35 @@
   --color-accent-700: oklch(0.496 0.265 302);
   --color-accent-800: oklch(0.438 0.218 303);
   --color-accent-900: oklch(0.381 0.176 304);
+
+  /* Semantic neutrals — light theme defaults. Overridden under .dark below. */
+  --color-canvas: #f8fafc; /* page backdrop base   (slate-50)  */
+  --color-surface: #ffffff; /* cards, bars                       */
+  --color-surface-muted: #f8fafc; /* insets, hover, notes (slate-50)  */
+  --color-foreground: #0f172a; /* primary text        (slate-900) */
+  --color-muted: #64748b; /* secondary text      (slate-500) */
+  --color-subtle: #94a3b8; /* tertiary/placeholder(slate-400) */
+  --color-line: #e2e8f0; /* subtle borders/rings(slate-200) */
+  --color-line-strong: #cbd5e1; /* input rings         (slate-300) */
 }
 
-/* A soft brand-tinted page backdrop — never pure white (Refactoring UI). */
+/* Dark theme: re-point the semantic neutrals. Utilities pick these up via
+   var(), so no markup changes are needed. */
+.dark {
+  --color-canvas: #020617; /* slate-950 */
+  --color-surface: #0f172a; /* slate-900 */
+  --color-surface-muted: #1e293b; /* slate-800 */
+  --color-foreground: #f1f5f9; /* slate-100 */
+  --color-muted: #94a3b8; /* slate-400 */
+  --color-subtle: #64748b; /* slate-500 */
+  --color-line: #1e293b; /* slate-800 */
+  --color-line-strong: #334155; /* slate-700 */
+}
+
+/* Soft brand-tinted page backdrop — never a flat fill (Refactoring UI). */
 body {
-  @apply bg-slate-50 text-slate-700 antialiased;
+  background-color: var(--color-canvas);
+  color: var(--color-muted);
   background-image:
     radial-gradient(
       60rem 60rem at 110% -10%,
@@ -46,4 +78,20 @@ body {
     );
   background-attachment: fixed;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dim the glow so it reads as ambient color, not bright blobs, on dark. */
+.dark body {
+  background-image:
+    radial-gradient(
+      60rem 60rem at 110% -10%,
+      color-mix(in oklab, var(--color-accent-500) 16%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      50rem 50rem at -10% 0%,
+      color-mix(in oklab, var(--color-brand-500) 14%, transparent) 0%,
+      transparent 50%
+    );
 }

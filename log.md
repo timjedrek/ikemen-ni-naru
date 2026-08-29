@@ -5,6 +5,57 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — UI: Tailwind styling, dark/light theme, and branding
+
+**Goal:** make the app look modern (Refactoring UI principles) with a green +
+purple palette, a proper light/dark toggle, and the new logo.
+
+**Built (styling)**
+- Tailwind v4 via `@tailwindcss/vite` (plugin in `vite.config.ts`; single
+  `@import "tailwindcss"` in `global.css`). No config file — theme lives in CSS.
+- Restyled all four pages (home, login, register, `/food`): centered auth cards,
+  a food-log app bar + two-column grid (sticky form / entries), macro **totals**
+  stat tiles, meal-category badges, empty state. Logic untouched — markup/classes
+  only.
+
+**Built (theming)**
+- **Semantic color tokens** in `global.css` (`surface`, `surface-muted`,
+  `foreground`, `muted`, `subtle`, `line`, `line-strong`). Light values in
+  `@theme`; a `.dark {}` block re-points them. Utilities resolve through `var()`,
+  so the whole UI flips by toggling one `.dark` class on `<html>` — no `dark:`
+  needed for ordinary chrome. The vivid brand (emerald) / accent (violet) palette
+  stays constant; only tinted bits (badges, error banners, delete btn) got
+  explicit `dark:` variants via `@custom-variant dark`.
+- `ThemeToggle` component: toggles `.dark`, persists to localStorage; sun/moon
+  swap purely by CSS so there's no hydration mismatch.
+- No-flash inline script in `root.tsx <head>` applies saved (or `prefers-color-
+  scheme`) theme **before first paint**.
+
+**Built (logo)**
+- `components/logo/logo.tsx`: inline SVG `Logo` (icon + イケメンになる wordmark)
+  and `LogoMark` (icon only). Chose inline over `<img>` so the wordmark can be
+  theme-aware. Wired into home hero, auth pages, and food header; replaced the
+  stock Qwik `favicon.svg` with the mark.
+
+**Decisions / gotchas**
+- Inline SVG (not `<img>`) so the neutral wordmark flips
+  (`fill-slate-700 dark:fill-slate-100`); accent `る` keeps violet.
+- Unique gradient id per logo instance via `useId()` to avoid `url(#id)`
+  collisions when two logos share a page.
+- Wordmark uses **system** Japanese fonts (Hiragino / Noto Sans JP / Yu Gothic) —
+  renders per-OS. Embed a webfont / outline the paths later if pixel-identical
+  rendering is needed.
+- Home hero logo sizing/alignment tweaks: bumped to `h-32`; added `self-start`
+  so the flex column doesn't stretch the SVG box and center its content; cropped
+  the lockup `viewBox` left gutter (`0 0 820 280` → `48 0 772 280`) so the mark's
+  left edge lines up with the "Health Tracker" heading below it.
+
+**Verified:** `build.types` (tsc) + `qwik build` clean. Confirmed in the emitted
+CSS: the `.dark` token override block, `var()`-based semantic utilities, and the
+`dark:` + `fill-*` variants all generate.
+
+---
+
 ## 2026-08-29 — Phase 6: authentication and user isolation
 
 **Goal:** real users, per-user data isolation, and a browser-safe session.
