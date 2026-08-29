@@ -5,74 +5,29 @@ import { LogoMark } from "~/components/logo/logo";
 import { ThemeToggle } from "~/components/theme-toggle/theme-toggle";
 import {
   ApiError,
-  createFoodEntry,
-  deleteFoodEntry,
+  createWeightEntry,
+  deleteWeightEntry,
   getCurrentUser,
-  listFoodEntries,
+  listWeightEntries,
   logout,
-  updateFoodEntry,
+  updateWeightEntry,
   type User,
 } from "~/services/api";
+import type { WeightEntry, WeightEntryCreate } from "~/types/weight-entry";
 import {
-  MEAL_CATEGORIES,
-  type FoodEntry,
-  type FoodEntryCreate,
-  type FoodEntryList,
-  type MealCategory,
-} from "~/types/food-entry";
-
-// Local YYYY-MM-DD for <input type="date"> defaults. Built from local date
-// parts (not toISOString, which is UTC and can be off by a day near midnight).
-function todayIso(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
+  formatDateTime,
+  isoToLocalInput,
+  localInputToIso,
+  nowLocalInput,
+} from "~/utils/datetime";
 
 // The form holds every field as a string (what inputs produce). Converted to
 // the API payload on submit.
-type FormState = {
-  food_name: string;
-  meal_category: MealCategory;
-  serving_description: string;
-  calories: string;
-  protein_g: string;
-  carb_g: string;
-  fat_g: string;
-  notes: string;
-};
+type FormState = { measured_at: string; weight: string; notes: string };
 
 function blankForm(): FormState {
-  return {
-    food_name: "",
-    meal_category: "breakfast",
-    serving_description: "",
-    calories: "",
-    protein_g: "",
-    carb_g: "",
-    fat_g: "",
-    notes: "",
-  };
+  return { measured_at: nowLocalInput(), weight: "", notes: "" };
 }
-
-// Atwater factors: 4 cal/g protein & carb, 9 cal/g fat. Returns "" when no macros
-// are entered so the field stays blank rather than showing 0.
-function caloriesFromMacros(form: FormState): string {
-  const protein = Number(form.protein_g) || 0;
-  const carb = Number(form.carb_g) || 0;
-  const fat = Number(form.fat_g) || 0;
-  if (!protein && !carb && !fat) return "";
-  return String(Math.round(protein * 4 + carb * 4 + fat * 9));
-}
-
-// Tinted badge per meal — alternating brand/accent so the list scans quickly.
-const MEAL_BADGE: Record<string, string> = {
-  breakfast: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
-  lunch: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
-  dinner: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
-  snack: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
-};
 
 const labelClass = "block text-sm font-medium text-foreground";
 const inputClass =
@@ -85,8 +40,7 @@ export default component$(() => {
   const authUser = useSignal<User | null>(null);
   const authChecked = useSignal(false);
 
-  const selectedDate = useSignal("");
-  const data = useSignal<FoodEntryList | null>(null);
+  const items = useSignal<WeightEntry[]>([]);
   const listError = useSignal<string | null>(null);
   const listLoading = useSignal(false);
 
@@ -96,10 +50,9 @@ export default component$(() => {
   const formError = useSignal<string | null>(null);
 
   const reload = $(async () => {
-    if (!selectedDate.value) return;
     listLoading.value = true;
     try {
-      data.value = await listFoodEntries(selectedDate.value);
+      items.value = (await listWeightEntries()).items;
       listError.value = null;
     } catch (err) {
       listError.value = err instanceof Error ? err.message : "Failed to load entries";
@@ -108,10 +61,8 @@ export default component$(() => {
     }
   });
 
-  // Route protection (buildplan Step 34): confirm a valid session before
-  // showing anything. Unauthenticated → redirect to login. This is a usability
-  // guard; the backend remains the real security boundary (every API call is
-  // independently authenticated).
+  // Route protection (buildplan Step 34): confirm a valid session before showing
+  // anything. Usability guard only; the backend is the real security boundary.
   // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(async () => {
     const user = await getCurrentUser();
@@ -121,15 +72,7 @@ export default component$(() => {
     }
     authUser.value = user;
     authChecked.value = true;
-    selectedDate.value = todayIso(); // triggers the load task below
-  });
-
-  // Reload whenever the selected date changes — but only once authenticated.
-  // eslint-disable-next-line qwik/no-use-visible-task
-  useVisibleTask$(({ track }) => {
-    const date = track(() => selectedDate.value);
-    if (!authChecked.value || !date) return;
-    reload();
+    await reload();
   });
 
   const doLogout = $(async () => {
@@ -143,14 +86,9 @@ export default component$(() => {
     formError.value = null;
   });
 
-  const startEdit = $((entry: FoodEntry) => {
-    form.food_name = entry.food_name;
-    form.meal_category = entry.meal_category;
-    form.serving_description = entry.serving_description ?? "";
-    form.calories = String(entry.calories);
-    form.protein_g = entry.protein_g;
-    form.carb_g = entry.carb_g;
-    form.fat_g = entry.fat_g;
+  const startEdit = $((entry: WeightEntry) => {
+    form.measured_at = isoToLocalInput(entry.measured_at);
+    form.weight = entry.weight;
     form.notes = entry.notes ?? "";
     editingId.value = entry.id;
     formError.value = null;
@@ -159,23 +97,16 @@ export default component$(() => {
   const submit = $(async () => {
     submitting.value = true;
     formError.value = null;
-    // Macros/calories left as-typed strings; the API validates and coerces.
-    const payload: FoodEntryCreate = {
-      entry_date: selectedDate.value,
-      meal_category: form.meal_category,
-      food_name: form.food_name.trim(),
-      calories: Number(form.calories),
-      protein_g: form.protein_g,
-      carb_g: form.carb_g,
-      fat_g: form.fat_g,
-      serving_description: form.serving_description.trim() || null,
+    const payload: WeightEntryCreate = {
+      measured_at: localInputToIso(form.measured_at),
+      weight: form.weight,
       notes: form.notes.trim() || null,
     };
     try {
       if (editingId.value !== null) {
-        await updateFoodEntry(editingId.value, payload);
+        await updateWeightEntry(editingId.value, payload);
       } else {
-        await createFoodEntry(payload);
+        await createWeightEntry(payload);
       }
       await resetForm();
       await reload();
@@ -189,7 +120,7 @@ export default component$(() => {
 
   const remove = $(async (id: number) => {
     try {
-      await deleteFoodEntry(id);
+      await deleteWeightEntry(id);
       if (editingId.value === id) await resetForm();
       await reload();
     } catch (err) {
@@ -197,11 +128,10 @@ export default component$(() => {
     }
   });
 
-  const totals = data.value?.totals;
-  const entries = data.value?.items ?? [];
+  const entries = items.value;
+  const latest = entries[0]; // list is newest-first
 
-  // Hold the whole page until auth resolves so protected content can't flash
-  // before a redirect.
+  // Hold the whole page until auth resolves so protected content can't flash.
   if (!authChecked.value) {
     return (
       <main class="flex min-h-screen items-center justify-center">
@@ -218,7 +148,7 @@ export default component$(() => {
           <div class="flex items-center gap-2.5">
             <LogoMark class="h-8 w-8" />
             <span class="text-base font-semibold tracking-tight text-foreground">
-              Food Log
+              Weight Log
             </span>
           </div>
           <LogNav />
@@ -242,34 +172,21 @@ export default component$(() => {
       </header>
 
       <main class="mx-auto max-w-5xl px-6 py-8">
-        {/* Date selector */}
+        {/* Heading */}
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 class="text-2xl font-bold tracking-tight text-foreground">
-              Your day
-            </h1>
+            <h1 class="text-2xl font-bold tracking-tight text-foreground">Weight</h1>
             <p class="mt-0.5 text-sm text-muted">
-              Track what you eat and watch your macros add up.
+              Log it whenever — each weigh-in keeps its own time.
             </p>
           </div>
-          <label class="flex items-center gap-2 text-sm font-medium text-foreground">
-            Date
-            <input
-              type="date"
-              value={selectedDate.value}
-              onChange$={(_, el) => (selectedDate.value = el.value)}
-              class="rounded-lg border-0 bg-surface px-3 py-2 text-foreground shadow-sm ring-1 ring-inset ring-line-strong focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
-            />
-          </label>
         </div>
 
-        {/* Totals summary */}
-        {totals && entries.length > 0 && (
+        {/* Latest summary */}
+        {latest && (
           <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Calories" value={`${totals.calories}`} unit="kcal" accent />
-            <StatCard label="Protein" value={totals.protein_g} unit="g" />
-            <StatCard label="Carbs" value={totals.carb_g} unit="g" />
-            <StatCard label="Fat" value={totals.fat_g} unit="g" />
+            <StatCard label="Latest" value={latest.weight} unit={latest.unit} accent />
+            <StatCard label="Weigh-ins" value={`${entries.length}`} unit="logged" />
           </div>
         )}
 
@@ -279,16 +196,13 @@ export default component$(() => {
             aria-labelledby="form-heading"
             class="h-fit rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-line lg:sticky lg:top-24"
           >
-            <h2
-              id="form-heading"
-              class="text-lg font-semibold tracking-tight text-foreground"
-            >
-              {editingId.value !== null ? "Edit entry" : "Add an entry"}
+            <h2 id="form-heading" class="text-lg font-semibold tracking-tight text-foreground">
+              {editingId.value !== null ? "Edit measurement" : "Log a measurement"}
             </h2>
             <p class="mt-0.5 text-sm text-muted">
               {editingId.value !== null
                 ? "Update the details below."
-                : "Log a food and its macros."}
+                : "Record your weight and when you took it."}
             </p>
 
             {formError.value && (
@@ -303,114 +217,35 @@ export default component$(() => {
             <form preventdefault:submit onSubmit$={submit} class="mt-5 space-y-4">
               <div>
                 <label class={labelClass}>
-                  Food name
+                  When
                   <input
-                    type="text"
+                    type="datetime-local"
                     required
                     class={inputClass}
-                    value={form.food_name}
-                    onInput$={(_, el) => (form.food_name = el.value)}
+                    value={form.measured_at}
+                    onInput$={(_, el) => (form.measured_at = el.value)}
                   />
                 </label>
               </div>
 
               <div>
                 <label class={labelClass}>
-                  Meal
-                  <select
-                    class={inputClass}
-                    value={form.meal_category}
-                    onChange$={(_, el) =>
-                      (form.meal_category = el.value as MealCategory)
-                    }
-                  >
-                    {MEAL_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div>
-                <label class={labelClass}>
-                  Serving{" "}
-                  <span class="font-normal text-subtle">(optional)</span>
-                  <input
-                    type="text"
-                    class={inputClass}
-                    value={form.serving_description}
-                    onInput$={(_, el) => (form.serving_description = el.value)}
-                  />
-                </label>
-              </div>
-
-              <div class="grid grid-cols-3 gap-3">
-                <label class={labelClass}>
-                  Protein
+                  Weight <span class="font-normal text-subtle">(lb)</span>
                   <input
                     type="number"
                     required
                     min="0"
-                    step="0.01"
+                    step="0.1"
                     class={inputClass}
-                    value={form.protein_g}
-                    onInput$={(_, el) => {
-                      form.protein_g = el.value;
-                      form.calories = caloriesFromMacros(form);
-                    }}
-                  />
-                </label>
-                <label class={labelClass}>
-                  Carbs
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    class={inputClass}
-                    value={form.carb_g}
-                    onInput$={(_, el) => {
-                      form.carb_g = el.value;
-                      form.calories = caloriesFromMacros(form);
-                    }}
-                  />
-                </label>
-                <label class={labelClass}>
-                  Fat
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    class={inputClass}
-                    value={form.fat_g}
-                    onInput$={(_, el) => {
-                      form.fat_g = el.value;
-                      form.calories = caloriesFromMacros(form);
-                    }}
+                    value={form.weight}
+                    onInput$={(_, el) => (form.weight = el.value)}
                   />
                 </label>
               </div>
 
               <div>
                 <label class={labelClass}>
-                  Calories{" "}
-                  <span class="font-normal text-subtle">(auto)</span>
-                  <input
-                    type="number"
-                    readOnly
-                    class={`${inputClass} bg-black/5 dark:bg-white/5`}
-                    value={form.calories}
-                  />
-                </label>
-              </div>
-
-              <div>
-                <label class={labelClass}>
-                  Notes{" "}
-                  <span class="font-normal text-subtle">(optional)</span>
+                  Notes <span class="font-normal text-subtle">(optional)</span>
                   <textarea
                     rows={2}
                     class={inputClass}
@@ -430,7 +265,7 @@ export default component$(() => {
                     ? "Saving…"
                     : editingId.value !== null
                       ? "Save changes"
-                      : "Add entry"}
+                      : "Add measurement"}
                 </button>
                 {editingId.value !== null && (
                   <button
@@ -448,11 +283,8 @@ export default component$(() => {
 
           {/* Entries list */}
           <section aria-labelledby="list-heading">
-            <h2
-              id="list-heading"
-              class="mb-4 text-lg font-semibold tracking-tight text-foreground"
-            >
-              Entries for {selectedDate.value || "today"}
+            <h2 id="list-heading" class="mb-4 text-lg font-semibold tracking-tight text-foreground">
+              Recent weigh-ins
             </h2>
 
             {listLoading.value && <p class="text-sm text-muted">Loading…</p>}
@@ -468,14 +300,10 @@ export default component$(() => {
             {!listLoading.value && !listError.value && entries.length === 0 && (
               <div class="rounded-2xl border border-dashed border-line bg-surface/50 px-6 py-14 text-center">
                 <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-2xl dark:bg-brand-500/15">
-                  🍽️
+                  ⚖️
                 </div>
-                <p class="mt-4 text-sm font-medium text-foreground">
-                  No entries yet for this day
-                </p>
-                <p class="mt-1 text-sm text-muted">
-                  Add your first one using the form.
-                </p>
+                <p class="mt-4 text-sm font-medium text-foreground">No weigh-ins yet</p>
+                <p class="mt-1 text-sm text-muted">Add your first one using the form.</p>
               </div>
             )}
 
@@ -488,21 +316,13 @@ export default component$(() => {
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <h3 class="font-semibold text-foreground">
-                            {entry.food_name}
-                          </h3>
-                          <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MEAL_BADGE[entry.meal_category] ?? "bg-surface-muted text-muted"}`}
-                          >
-                            {entry.meal_category}
-                          </span>
-                        </div>
-                        {entry.serving_description && (
-                          <p class="mt-0.5 text-sm text-muted">
-                            {entry.serving_description}
-                          </p>
-                        )}
+                        <h3 class="font-semibold text-foreground">
+                          {entry.weight}{" "}
+                          <span class="text-sm font-normal text-subtle">{entry.unit}</span>
+                        </h3>
+                        <p class="mt-0.5 text-sm text-muted">
+                          {formatDateTime(entry.measured_at)}
+                        </p>
                       </div>
                       <div class="flex shrink-0 gap-1">
                         <button
@@ -522,22 +342,6 @@ export default component$(() => {
                       </div>
                     </div>
 
-                    <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                      <span class="font-semibold text-foreground">
-                        {entry.calories}{" "}
-                        <span class="font-normal text-subtle">kcal</span>
-                      </span>
-                      <span class="text-muted">
-                        P <span class="font-medium">{entry.protein_g}g</span>
-                      </span>
-                      <span class="text-muted">
-                        C <span class="font-medium">{entry.carb_g}g</span>
-                      </span>
-                      <span class="text-muted">
-                        F <span class="font-medium">{entry.fat_g}g</span>
-                      </span>
-                    </div>
-
                     {entry.notes && (
                       <p class="mt-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">
                         {entry.notes}
@@ -554,7 +358,7 @@ export default component$(() => {
   );
 });
 
-// Compact macro/calorie summary tile.
+// Compact summary tile (matches the food page's StatCard).
 const StatCard = component$<{
   label: string;
   value: string;
@@ -576,9 +380,7 @@ const StatCard = component$<{
       </p>
       <p class="mt-1 text-2xl font-bold tracking-tight">
         {value}
-        <span
-          class={`ml-1 text-sm font-normal ${accent ? "text-white/70" : "text-subtle"}`}
-        >
+        <span class={`ml-1 text-sm font-normal ${accent ? "text-white/70" : "text-subtle"}`}>
           {unit}
         </span>
       </p>

@@ -51,6 +51,24 @@ export default component$(() => {
           Open food log
         </Link>
         <Link
+          href="/weight"
+          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+        >
+          Weight
+        </Link>
+        <Link
+          href="/mood"
+          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+        >
+          Mood
+        </Link>
+        <Link
+          href="/sleep"
+          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+        >
+          Sleep
+        </Link>
+        <Link
           href="/login"
           class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
         >
