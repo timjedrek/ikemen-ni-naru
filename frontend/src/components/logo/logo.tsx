@@ -1,16 +1,28 @@
 import { component$, useId } from "@builder.io/qwik";
 
-// Shared silhouette + gradient stops for the app mark. The mark sits on the
-// emerald→violet gradient in both themes, so it never needs a dark variant —
-// only the wordmark text does (see Logo below).
-const FACE_PATH =
-  "M78.5 28.5 C96 24 114 36 118.5 58 C120.5 68 121 76 116.5 84.5 C123 91 121.5 102 111 110.5 C101 118 86 120 74 113 C66 124 49 130 36 120.5 C26 113 28 100 40 94 C34 88 30 78 32.5 66 C36 48 54 34 78.5 28.5 Z M52 96 C46 104 38 108 34 104.5 C30 101 33 93 42 90 C47 88 51 91 52 96 Z";
+// The face-and-leaves silhouette, vector-traced from the source artwork
+// (potrace). Coordinates live in a 309×309 space; a group transform below
+// centers it on the gradient square.
+const SILHOUETTE =
+  "M 156.563 38.651 C 172.204 59.141, 170.338 89.722, 151.884 115.343 C 150.237 117.629, 141.774 126.700, 133.078 135.500 C 112.009 156.819, 105.495 167.567, 104.743 182.245 C 104.609 184.855, 104.330 186.992, 104.122 186.995 C 101.991 187.023, 91.144 179.262, 86 174.030 C 53.362 140.833, 62.502 84.692, 104 63.465 C 107.025 61.918, 111.750 60.094, 114.500 59.411 L 119.500 58.170 113 58.100 C 76.509 57.705, 42.591 95.341, 46.504 131.884 C 49.014 155.321, 58.363 169.072, 85.190 188.786 C 104.418 202.916, 111.873 217.503, 110.759 238.814 C 110.126 250.925, 109.435 251.511, 103.013 245.384 C 98.368 240.951, 97.661 239.668, 95.365 231.500 C 88.553 207.264, 72.128 190.312, 47.500 182.102 C 42.550 180.452, 36.520 178.785, 34.100 178.399 L 29.700 177.696 30.420 186.598 C 33.330 222.613, 52.151 248.249, 82.500 257.536 C 90.448 259.968, 102.853 262.301, 101.308 261.074 C 100.863 260.721, 97.821 258.647, 94.546 256.466 C 82.964 248.751, 70.107 233.747, 65.440 222.500 C 63.968 218.953, 65.464 220.143, 78.641 233 C 95.020 248.982, 100.677 253.594, 112.957 260.974 C 155.451 286.514, 207.432 276.197, 233.145 237.122 C 238.357 229.201, 239.845 225.153, 235.175 231.600 C 229.937 238.829, 216.827 249.057, 205.500 254.750 C 187.580 263.756, 167.521 266.602, 148.250 262.874 L 143 261.858 143.001 253.179 C 143.003 231.516, 156.436 220, 181.704 220 C 200.247 220, 204.990 215.255, 201.815 199.881 C 200.661 194.297, 200.707 194.031, 203.508 189.989 C 207.464 184.281, 206.334 182.667, 197.897 181.975 C 192.727 181.550, 185 178.969, 185 177.666 C 185 177.511, 188.938 177.550, 193.750 177.752 C 201.238 178.067, 202.969 177.825, 205.750 176.075 C 209.435 173.756, 209.642 172.644, 207.421 167.094 C 204.860 160.694, 205.667 158.906, 212.653 155.500 C 223.641 150.143, 224.302 148.239, 217.869 140.482 C 199.387 118.197, 197 113.480, 197 99.243 C 197 86.851, 195.471 79.730, 190.612 69.500 C 184.062 55.706, 173.007 44.013, 159.924 37.040 C 152.509 33.088, 152.369 33.156, 156.563 38.651 M 183.563 119.670 C 180.245 121.466, 171.906 121.694, 167.750 120.103 C 164.129 118.716, 164.256 120.196, 168.029 123.371 C 174.783 129.054, 188 127.139, 188 120.477 C 188 117.603, 187.537 117.519, 183.563 119.670";
 
+// Gradient stops sampled from the source artwork (emerald → teal → violet).
 const GradientStops = component$(() => (
   <>
-    <stop offset="0%" stop-color="#009965" />
-    <stop offset="42%" stop-color="#00bc7c" />
-    <stop offset="100%" stop-color="#ad46ff" />
+    <stop offset="0%" stop-color="#0a7b5c" />
+    <stop offset="45%" stop-color="#3fa98c" />
+    <stop offset="100%" stop-color="#a064de" />
+  </>
+));
+
+// The rounded gradient tile + centered white silhouette. Reused by both the
+// icon-only mark and the full lockup.
+const IconTile = component$<{ gradientId: string }>(({ gradientId }) => (
+  <>
+    <rect width="309" height="309" rx="70" fill={`url(#${gradientId})`} />
+    <g transform="translate(154.5,156) scale(1.07) translate(-133.5,-154.5)">
+      <path fill="#fff" d={SILHOUETTE} />
+    </g>
   </>
 ));
 
@@ -19,27 +31,17 @@ export const LogoMark = component$<{ class?: string }>(({ class: cls }) => {
   const gid = useId();
   return (
     <svg
-      viewBox="0 0 164 164"
+      viewBox="0 0 309 309"
       class={cls}
       role="img"
       aria-label="Ikemen ni Naru"
     >
       <defs>
-        <linearGradient id={gid} x1="8%" y1="12%" x2="92%" y2="88%">
+        <linearGradient id={gid} x1="6%" y1="6%" x2="94%" y2="94%">
           <GradientStops />
         </linearGradient>
       </defs>
-      <rect width="164" height="164" rx="38" fill={`url(#${gid})`} />
-      <path fill="#fff" d={FACE_PATH} />
-      <g
-        fill="none"
-        stroke={`url(#${gid})`}
-        stroke-width="3.2"
-        stroke-linecap="round"
-      >
-        <path d="M92 72.5 C96 71 101 71.5 105.5 74" />
-        <path d="M94 90 C99 94 107 94.5 112.5 89.5" />
-      </g>
+      <IconTile gradientId={gid} />
     </svg>
   );
 });
@@ -53,43 +55,32 @@ export const Logo = component$<{ class?: string }>(({ class: cls }) => {
   const gid = useId();
   return (
     <svg
-      viewBox="48 0 772 280"
+      viewBox="0 0 1400 309"
       class={cls}
       role="img"
       aria-label="イケメンになる — Ikemen ni Naru"
     >
       <defs>
-        <linearGradient id={gid} x1="8%" y1="12%" x2="92%" y2="88%">
+        <linearGradient id={gid} x1="6%" y1="6%" x2="94%" y2="94%">
           <GradientStops />
         </linearGradient>
       </defs>
 
-      {/* App icon */}
-      <g transform="translate(48 58)">
-        <rect width="164" height="164" rx="38" fill={`url(#${gid})`} />
-        <path fill="#fff" d={FACE_PATH} />
-        <g
-          fill="none"
-          stroke={`url(#${gid})`}
-          stroke-width="3.2"
-          stroke-linecap="round"
-        >
-          <path d="M92 72.5 C96 71 101 71.5 105.5 74" />
-          <path d="M94 90 C99 94 107 94.5 112.5 89.5" />
-        </g>
-      </g>
+      <IconTile gradientId={gid} />
 
-      {/* Wordmark */}
+      {/* textLength pins the wordmark width so the lockup size is deterministic
+          regardless of which system Japanese serif font is available. */}
       <text
-        x="248"
-        y="156"
-        font-family="'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', 'YuGothic', sans-serif"
-        font-size="52"
-        font-weight="500"
-        letter-spacing="0.04em"
+        x="362"
+        y="207"
+        textLength="1000"
+        lengthAdjust="spacingAndGlyphs"
+        font-family="'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', 'Noto Serif JP', serif"
+        font-size="150"
+        font-weight="600"
       >
-        <tspan class="fill-slate-700 dark:fill-slate-100">イケメンにな</tspan>
-        <tspan class="fill-accent-600 dark:fill-accent-400">る</tspan>
+        <tspan class="fill-slate-700 dark:fill-slate-100">イケメンに</tspan>
+        <tspan class="fill-accent-600 dark:fill-accent-400">なる</tspan>
       </text>
     </svg>
   );

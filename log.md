@@ -36,6 +36,15 @@ purple palette, a proper light/dark toggle, and the new logo.
   and `LogoMark` (icon only). Chose inline over `<img>` so the wordmark can be
   theme-aware. Wired into home hero, auth pages, and food header; replaced the
   stock Qwik `favicon.svg` with the mark.
+- **Real logo vector-traced from source art** (superseded the first hand-drawn
+  "blob" silhouette, which never matched): user supplied `image.jpg` (face +
+  leaves on the emerald→violet tile). Pipeline: ImageMagick crop the icon →
+  threshold to a b/w silhouette → mask off the icon's glossy rim/cream corners →
+  **potrace** (npm) → single path in a 309×309 space, centered on the tile via a
+  group transform. Gradient stops sampled from the art (`#0a7b5c` → `#3fa98c` →
+  `#a064de`). Wordmark switched to a **serif (Mincho)** stack to match, pinned
+  with `textLength`/`lengthAdjust` so lockup width is deterministic regardless of
+  the viewer's installed JP font.
 
 **Decisions / gotchas**
 - Inline SVG (not `<img>`) so the neutral wordmark flips
