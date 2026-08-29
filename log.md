@@ -5,6 +5,37 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Fix: session cookie dropped in local dev (login loop)
+
+**Symptom:** register/login appeared to fail — after submitting you landed back
+on `/login`. The account *was* created (re-registering reported the email
+already existed), so it was never a DB or auth-logic bug.
+
+**Root cause:** host mismatch. The frontend was opened at
+`http://localhost:5173` but `PUBLIC_API_BASE_URL` pointed the API at
+`http://127.0.0.1:8000`. Browsers treat `localhost` and `127.0.0.1` as
+different sites, so every `fetch` was **cross-site**. The session cookie is
+`SameSite=Lax` (correct for prod), and Lax cookies aren't sent on cross-site
+XHR/fetch — only on top-level navigations. So login set the cookie, but the
+follow-up `/auth/me` call didn't send it → 401 → `/food` redirected back to
+`/login`.
+
+**Fix:** point the frontend at the same host it's served from.
+- `frontend/.env` + `frontend/.env.example`: `PUBLIC_API_BASE_URL` now uses
+  `http://localhost:8000/api/v1` (was `127.0.0.1`).
+
+**Gotchas learned**
+- `PUBLIC_*` vars are baked in at Vite startup — restart the dev server after
+  editing `.env`.
+- Keep the frontend host and API host identical in dev (both `localhost`, or
+  both `127.0.0.1`). This is purely a dev artifact: in prod, same-origin +
+  HTTPS makes the cookie `Secure` and the issue disappears.
+
+**Verified:** login now lands on `/food` and the session persists across
+requests.
+
+---
+
 ## 2026-08-29 — UI: Tailwind styling, dark/light theme, and branding
 
 **Goal:** make the app look modern (Refactoring UI principles) with a green +
