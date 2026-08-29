@@ -5,6 +5,49 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Phase 5: first vertical slice (food entries, end to end)
+
+**Goal:** prove the whole stack hangs together on one feature — Pydantic
+schemas ↔ CRUD ↔ endpoints ↔ Qwik page ↔ Postgres — before adding auth.
+
+**Built (backend)**
+- `app/schemas/food_entry.py`: `FoodEntryCreate` / `Update` / `Response` /
+  `FoodEntryList` (+ `DailyTotals`, `MealCategory` enum). Kept separate from the
+  ORM model so clients can't set `user_id`/timestamps; validation mirrors the DB
+  (macros `ge=0` + `Numeric(6,2)`, calories `ge=0`).
+- `app/crud/food_entry.py`: create/get/list/update/delete + `sum_food_entries`.
+  Owner is a **parameter**, not read from the temp constant — so Phase 6 changes
+  only the routes. `get` scopes by owner (wrong owner → None).
+- `app/api/routes/food_entries.py`: the 5 endpoints under `/api/v1/food-entries`.
+  List starts with date + limit/offset only (other filters deferred). Empty
+  PATCH → 422; missing id → 404; delete → 204.
+- Alembic `1fe11a2c1211_seed_temporary_dev_user`: seeds the one hard-coded owner.
+
+**Built (frontend)**
+- `types/food-entry.ts`, `services/api.ts` (added `ApiError` that surfaces
+  FastAPI `detail`, JSON-body handling, 204 → undefined, food-entry calls).
+- `routes/food/index.tsx`: date picker, add/edit form (pending-disable, server
+  error display, reset-on-success, accessible labels), daily list with
+  edit/delete + empty state, and server-computed daily totals rendered as-is.
+
+**Decisions**
+- **Temporary ownership stopgap** (`app/core/temp_owner.py`, `TEMP_DEV_USER_ID`):
+  auth is Phase 6, but entries need an owner now. One seeded dev user (fixed id
+  1, unusable password hash `"!"`), attributed at the route layer only. Loud
+  `# TEMPORARY: remove in Phase 6` markers; `grep TEMP_DEV_USER_ID` finds all 3
+  touchpoints (constant, migration, route). Removed by downgrading the seed.
+- Macros serialized as JSON strings (Decimal precision); UI keeps them as-is.
+- Totals computed in SQL over the full filtered set (not the page) so every
+  client renders identical numbers (Step 27).
+
+**Verified:** all 5 endpoints via TestClient (create 201, bad meal/negative cal
+422, list+totals, get 404, empty PATCH 422, delete 204/404) and over real HTTP
+via curl incl. CORS header for `localhost:5173`. Seed migration round-trips
+(downgrade removes user → None, re-upgrade restores). Frontend `tsc` + `qwik
+build` clean. Test rows cleaned up.
+
+---
+
 ## 2026-08-29 — Phase 4: database foundation (SQLAlchemy + Alembic + first schema)
 
 **Goal:** stop having no persistence; wire the ORM, migrations, and the first
