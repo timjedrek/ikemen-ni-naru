@@ -5,6 +5,26 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Fix: dashboard food chart ignored the date-range selector
+
+**Bug:** flipping the 7d/14d/30d (or custom) range redrew the weight/mood/sleep
+charts but left the **food** chart looking identical every time.
+
+**Cause:** `foodOption` built its x-axis straight from the API rows
+(`series.items.map((p) => p.date)`), so it only ever showed *days that had food
+logged*. Those days don't change when you widen the window, so the chart never
+appeared to move. The other three charts lay their data over the full `days`
+window via the shared `dayCategoryAxis(days, …)`, which is why they responded.
+
+**Fix (`frontend/src/routes/dashboard/index.tsx`):** `foodOption` now takes the
+same `days` array and spans the full selected window. Data is indexed by date
+into a `Map`, then mapped over `days`; unlogged days render as a 0 column
+instead of being dropped. x-axis switched to `dayCategoryAxis` for the same
+weekday labelling as the others; each point keeps its `date` so click-to-drill
+still works. Typecheck + eslint clean.
+
+---
+
 ## 2026-08-29 — Phase C: production packaging (Docker images, both apps)
 
 **Goal:** get both apps production-shaped and building/running from prod configs

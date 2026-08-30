@@ -119,6 +119,27 @@ const baseGrid = { left: 48, right: 16, top: 24, bottom: 32 };
 
 // --- option builders (pure; no inline functions except ECharts renderItem) --
 
+// Axis tooltip for the food chart: the day, then one line per macro showing
+// both its calorie contribution and the grams behind it, then a calorie total.
+type FoodTip = {
+  seriesName: string;
+  marker: string;
+  axisValueLabel: string;
+  value: number;
+  data: { grams: number };
+};
+function foodTooltip(params: FoodTip[]): string {
+  const head = params[0]?.axisValueLabel ?? "";
+  const total = params.reduce((sum, p) => sum + (p.value || 0), 0);
+  const rows = params
+    .map(
+      (p) =>
+        `${p.marker}${p.seriesName}: <strong>${p.value} kcal</strong> (${p.data.grams} g)`,
+    )
+    .join("<br/>");
+  return `${head}<br/>${rows}<br/>Total: <strong>${total} kcal</strong>`;
+}
+
 function foodOption(series: FoodSeries, days: string[], dark: boolean): object {
   const n = neutrals(dark);
   // Index the API's per-day points so we can lay them out over the full
@@ -127,15 +148,17 @@ function foodOption(series: FoodSeries, days: string[], dark: boolean): object {
   // change this chart the way it does the weight/mood/sleep ones.
   const byDay = new Map(series.items.map((p) => [p.date, p]));
   // Stack macro *calorie contributions* (Atwater: 4/4/9) so the stack height
-  // reads as total calories — grams alone wouldn't sum to calories.
+  // reads as total calories — grams alone wouldn't sum to calories. Each point
+  // also carries its raw grams so the tooltip can show both.
   const macro = (factor: number, grams: (p: FoodDayPoint) => string) =>
     days.map((date) => {
       const p = byDay.get(date);
-      return { value: p ? Math.round(Number(grams(p)) * factor) : 0, date };
+      const g = p ? Math.round(Number(grams(p))) : 0;
+      return { value: p ? Math.round(g * factor) : 0, grams: g, date };
     });
   return {
     grid: baseGrid,
-    tooltip: { trigger: "axis" },
+    tooltip: { trigger: "axis", formatter: foodTooltip },
     legend: {
       data: ["Protein", "Carbs", "Fat"],
       top: 0,
