@@ -18,6 +18,7 @@ import {
   type User,
 } from "~/services/api";
 import type {
+  FoodDayPoint,
   FoodSeries,
   MoodSeries,
   SleepSeries,
@@ -118,15 +119,20 @@ const baseGrid = { left: 48, right: 16, top: 24, bottom: 32 };
 
 // --- option builders (pure; no inline functions except ECharts renderItem) --
 
-function foodOption(series: FoodSeries, dark: boolean): object {
+function foodOption(series: FoodSeries, days: string[], dark: boolean): object {
   const n = neutrals(dark);
-  const dates = series.items.map((p) => p.date);
+  // Index the API's per-day points so we can lay them out over the full
+  // selected window; days with no logged food render as an empty (0) column
+  // rather than being dropped — that's what makes the range selector visibly
+  // change this chart the way it does the weight/mood/sleep ones.
+  const byDay = new Map(series.items.map((p) => [p.date, p]));
   // Stack macro *calorie contributions* (Atwater: 4/4/9) so the stack height
   // reads as total calories — grams alone wouldn't sum to calories.
-  const pt = (grams: string, factor: number, date: string) => ({
-    value: Math.round(Number(grams) * factor),
-    date,
-  });
+  const macro = (factor: number, grams: (p: FoodDayPoint) => string) =>
+    days.map((date) => {
+      const p = byDay.get(date);
+      return { value: p ? Math.round(Number(grams(p)) * factor) : 0, date };
+    });
   return {
     grid: baseGrid,
     tooltip: { trigger: "axis" },
@@ -136,12 +142,7 @@ function foodOption(series: FoodSeries, dark: boolean): object {
       right: 0,
       textStyle: { color: n.axis },
     },
-    xAxis: {
-      type: "category",
-      data: dates,
-      axisLabel: { color: n.axis },
-      axisLine: { lineStyle: { color: n.split } },
-    },
+    xAxis: dayCategoryAxis(days, dark),
     yAxis: {
       type: "value",
       name: "kcal",
@@ -158,7 +159,7 @@ function foodOption(series: FoodSeries, dark: boolean): object {
         showSymbol: false,
         lineStyle: { width: 1 },
         color: COLOR.protein,
-        data: series.items.map((p) => pt(p.protein_g, 4, p.date)),
+        data: macro(4, (p) => p.protein_g),
       },
       {
         name: "Carbs",
@@ -168,7 +169,7 @@ function foodOption(series: FoodSeries, dark: boolean): object {
         showSymbol: false,
         lineStyle: { width: 1 },
         color: COLOR.carb,
-        data: series.items.map((p) => pt(p.carb_g, 4, p.date)),
+        data: macro(4, (p) => p.carb_g),
       },
       {
         name: "Fat",
@@ -178,7 +179,7 @@ function foodOption(series: FoodSeries, dark: boolean): object {
         showSymbol: false,
         lineStyle: { width: 1 },
         color: COLOR.fat,
-        data: series.items.map((p) => pt(p.fat_g, 9, p.date)),
+        data: macro(9, (p) => p.fat_g),
       },
     ],
   };
@@ -611,7 +612,7 @@ export default component$(() => {
             {hasFood ? (
               <Chart
                 class="h-72 w-full"
-                option={noSerialize(foodOption(food.value!, dark.value))}
+                option={noSerialize(foodOption(food.value!, days, dark.value))}
                 onPointClick$={openDay}
               />
             ) : (
