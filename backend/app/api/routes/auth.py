@@ -12,12 +12,18 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import settings
-from app.core.security import verify_password
+from app.core.security import normalize_email, verify_password
 from app.crud import session as session_crud
 from app.crud import user as user_crud
 from app.database.session import get_db
 from app.models.user import User
-from app.schemas.auth import UserLogin, UserRegister, UserResponse
+from app.schemas.auth import (
+    PasswordChange,
+    ProfileUpdate,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -100,3 +106,60 @@ def logout(
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+
+
+# Wrong current password on a self-service change. Distinct from the login 401
+# and the "not authenticated" 401 — the session is valid, the re-auth just failed.
+_BAD_CURRENT_PASSWORD = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect."
+)
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    data: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    # `current_password` is a confirmation input, not a profile field — the only
+    # things actually updatable here are display_name and email.
+    changes = data.model_dump(exclude_unset=True)
+    changes.pop("current_password", None)
+    if not changes:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Provide at least one field to update.",
+        )
+
+    # An email change is sensitive: require the current password, and enforce the
+    # same one-account-per-email rule as registration (normalized compare; the DB
+    # unique constraint is still the authority). A no-op "change" to the same
+    # address is allowed through without a password prompt.
+    if "email" in changes and normalize_email(changes["email"]) != current_user.email:
+        if not data.current_password or not verify_password(
+            data.current_password, current_user.password_hash
+        ):
+            raise _BAD_CURRENT_PASSWORD
+        existing = user_crud.get_user_by_email(db, changes["email"])
+        if existing is not None and existing.id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists.",
+            )
+
+    return user_crud.update_user_profile(db, current_user, changes)
+
+
+@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    data: PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    session_token: str | None = Cookie(default=None, alias=settings.session_cookie_name),
+) -> None:
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise _BAD_CURRENT_PASSWORD
+    user_crud.change_user_password(db, current_user, data.new_password)
+    # Revoke every other session so an old, possibly-leaked password can't keep a
+    # live session; the caller's current cookie stays valid.
+    session_crud.delete_user_sessions_except(db, current_user.id, session_token)

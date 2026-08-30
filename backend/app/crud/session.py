@@ -7,7 +7,7 @@ it is never recoverable from the DB afterward.
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from app.core.security import generate_session_token, hash_session_token
@@ -38,6 +38,21 @@ def get_valid_session(db: DbSession, token: str) -> Session | None:
     if session.expires_at <= datetime.now(timezone.utc):
         return None
     return session
+
+
+def delete_user_sessions_except(
+    db: DbSession, user_id: int, keep_token: str | None
+) -> int:
+    """Revoke every session for `user_id` except the one named by `keep_token`
+    (the caller's current cookie). Used after a password change so a leaked old
+    password can't keep other sessions alive, without logging the user out here.
+    Returns the number of sessions removed."""
+    stmt = delete(Session).where(Session.user_id == user_id)
+    if keep_token is not None:
+        stmt = stmt.where(Session.token_hash != hash_session_token(keep_token))
+    result = db.execute(stmt)
+    db.commit()
+    return result.rowcount
 
 
 def delete_session(db: DbSession, token: str) -> bool:

@@ -31,3 +31,25 @@ def create_user(
     db.commit()  # durable before the response is built (see get_db docstring)
     db.refresh(user)
     return user
+
+
+def update_user_profile(db: Session, user: User, fields: dict) -> User:
+    """Apply profile changes to `user`. Only the two editable columns are touched
+    and only when present in `fields` (so "set to null" is distinct from
+    "unchanged"); email is normalized on the way in, matching create_user. Callers
+    are responsible for any uniqueness/identity checks before calling this."""
+    if "email" in fields:
+        user.email = normalize_email(fields["email"])
+    if "display_name" in fields:
+        user.display_name = fields["display_name"]
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def change_user_password(db: Session, user: User, new_password: str) -> User:
+    """Set a new password hash. The caller verifies the current password first."""
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    db.refresh(user)
+    return user

@@ -22,6 +22,24 @@ class UserLogin(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class ProfileUpdate(BaseModel):
+    """Edit the signed-in user's own profile. Every field optional so the client
+    sends only what changes; the route rejects an empty payload. `current_password`
+    is not a profile field — it re-confirms identity when the email changes."""
+
+    display_name: str | None = Field(default=None, max_length=100)
+    email: EmailStr | None = None
+    current_password: str | None = Field(default=None, max_length=128)
+
+
+class PasswordChange(BaseModel):
+    """Change password: prove the current one, then set a new one held to the
+    same minimum length as registration."""
+
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)
+
+
 class UserResponse(BaseModel):
     """The safe public view of a user — never includes the password hash."""
 

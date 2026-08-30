@@ -145,6 +145,26 @@ export function logout(): Promise<void> {
   return apiFetch<void>("/auth/logout", { method: "POST" });
 }
 
+// Update the signed-in user's own profile (display name and/or email). Only send
+// what changed; an email change also requires current_password. Returns the
+// updated user.
+export function updateProfile(data: {
+  display_name?: string | null;
+  email?: string;
+  current_password?: string;
+}): Promise<User> {
+  return apiFetch<User>("/auth/me", { method: "PATCH", json: data });
+}
+
+// Change the password. On success the backend revokes the user's other sessions
+// (this one stays valid). No response body.
+export function changePassword(data: {
+  current_password: string;
+  new_password: string;
+}): Promise<void> {
+  return apiFetch<void>("/auth/password", { method: "POST", json: data });
+}
+
 // Returns the current user, or null if not authenticated (401). Other errors
 // still throw, so callers can distinguish "logged out" from "server down".
 export async function getCurrentUser(): Promise<User | null> {
