@@ -34,6 +34,7 @@ type FormState = {
   meal_category: MealCategory;
   serving_description: string;
   calories: string;
+  multiplier: string;
   protein_g: string;
   carb_g: string;
   fat_g: string;
@@ -46,6 +47,7 @@ function blankForm(): FormState {
     meal_category: "breakfast",
     serving_description: "",
     calories: "",
+    multiplier: "1",
     protein_g: "",
     carb_g: "",
     fat_g: "",
@@ -53,14 +55,30 @@ function blankForm(): FormState {
   };
 }
 
-// Atwater factors: 4 cal/g protein & carb, 9 cal/g fat. Returns "" when no macros
-// are entered so the field stays blank rather than showing 0.
+// Parsed multiplier, defaulting to 1 (so an empty/invalid field never zeroes out
+// the macros). Used to scale a label's per-serving values to the actual serving.
+function multiplierValue(form: FormState): number {
+  const mult = Number(form.multiplier);
+  return mult > 0 ? mult : 1;
+}
+
+// Scale a typed macro string by the multiplier, rounded to 2 decimals to avoid
+// floating-point noise. Returns the value as-typed when the multiplier is 1.
+function scaleMacro(value: string, mult: number): string {
+  const n = Number(value) || 0;
+  return String(Math.round(n * mult * 100) / 100);
+}
+
+// Atwater factors: 4 cal/g protein & carb, 9 cal/g fat, scaled by the serving
+// multiplier. Returns "" when no macros are entered so the field stays blank
+// rather than showing 0.
 function caloriesFromMacros(form: FormState): string {
   const protein = Number(form.protein_g) || 0;
   const carb = Number(form.carb_g) || 0;
   const fat = Number(form.fat_g) || 0;
   if (!protein && !carb && !fat) return "";
-  return String(Math.round(protein * 4 + carb * 4 + fat * 9));
+  const mult = multiplierValue(form);
+  return String(Math.round((protein * 4 + carb * 4 + fat * 9) * mult));
 }
 
 // Tinted badge per meal — alternating brand/accent so the list scans quickly.
@@ -141,6 +159,7 @@ export default component$(() => {
     form.meal_category = entry.meal_category;
     form.serving_description = entry.serving_description ?? "";
     form.calories = String(entry.calories);
+    form.multiplier = "1"; // stored macros are already scaled; edit from 1x
     form.protein_g = entry.protein_g;
     form.carb_g = entry.carb_g;
     form.fat_g = entry.fat_g;
@@ -152,15 +171,18 @@ export default component$(() => {
   const submit = $(async () => {
     submitting.value = true;
     formError.value = null;
-    // Macros/calories left as-typed strings; the API validates and coerces.
+    // Macros are typed per the label's serving, then scaled by the multiplier so
+    // the stored values reflect the actual serving. Calories are already scaled
+    // (caloriesFromMacros applies the multiplier). The API validates and coerces.
+    const mult = multiplierValue(form);
     const payload: FoodEntryCreate = {
       entry_date: selectedDate.value,
       meal_category: form.meal_category,
       food_name: form.food_name.trim(),
       calories: Number(form.calories),
-      protein_g: form.protein_g,
-      carb_g: form.carb_g,
-      fat_g: form.fat_g,
+      protein_g: scaleMacro(form.protein_g, mult),
+      carb_g: scaleMacro(form.carb_g, mult),
+      fat_g: scaleMacro(form.fat_g, mult),
       serving_description: form.serving_description.trim() || null,
       notes: form.notes.trim() || null,
     };
@@ -302,7 +324,7 @@ export default component$(() => {
 
               <div>
                 <label class={labelClass}>
-                  Serving{" "}
+                  Where{" "}
                   <span class="font-normal text-subtle">(optional)</span>
                   <input
                     type="text"
@@ -376,7 +398,25 @@ export default component$(() => {
 
               <div>
                 <label class={labelClass}>
-                  Notes{" "}
+                  Multiplier{" "}
+                  <span class="font-normal text-subtle">(servings)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    class={inputClass}
+                    value={form.multiplier}
+                    onInput$={(_, el) => {
+                      form.multiplier = el.value;
+                      form.calories = caloriesFromMacros(form);
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label class={labelClass}>
+                  Mood{" "}
                   <span class="font-normal text-subtle">(optional)</span>
                   <textarea
                     rows={2}
