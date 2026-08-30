@@ -193,12 +193,111 @@ function dayCategoryAxis(days: string[], dark: boolean): object {
   };
 }
 
-function weightOption(series: WeightSeries, days: string[], dark: boolean): object {
+// Shared x-axis for the per-entry trackers (weight/mood): a real time axis
+// spanning the selected window. Unlike the day-category axis, each reading sits
+// at its own instant, so several readings in one day are distinct points and the
+// line connects through *all* of them in chronological order — matching the
+// hand-drawn reference where the line never skips a point.
+function dayTimeAxis(start: string, end: string, dark: boolean): object {
   const n = neutrals(dark);
   return {
+    type: "time",
+    // Pin the window to the selected range so the line spans the whole month
+    // rather than just the first/last reading.
+    min: `${start}T00:00:00`,
+    max: `${end}T23:59:59`,
+    axisLabel: { color: n.axis, hideOverlap: true, formatter: "{M}/{d}" },
+    axisLine: { lineStyle: { color: n.split } },
+    axisTick: { show: false },
+    splitLine: { show: false },
+  };
+}
+
+// One reading, flattened for charting: its instant (`t`), value (`v`), and the
+// local day it belongs to.
+type EntryPoint = { t: string; v: number; day: string };
+
+// Build the day-to-day connecting segments. A single polyline can't express
+// "the 28th connects to *both* the 29th's readings" — it would just thread
+// 240 → 245 → 242. So instead we fully connect each day's points to the next
+// day's points (a bipartite join): every dot on day N gets a line to every dot
+// on day N+1. Multiple readings a day therefore fan out into the diamond/zigzag
+// shapes from the hand-drawn reference. "Next day" means the next day that has
+// data, so gaps stay bridged and the line reads as continuous.
+function daySegments(points: EntryPoint[]): { coords: [string, number][] }[] {
+  const byDay = new Map<string, EntryPoint[]>();
+  for (const p of points) {
+    const bucket = byDay.get(p.day);
+    if (bucket) bucket.push(p);
+    else byDay.set(p.day, [p]);
+  }
+  const days = [...byDay.keys()].sort(); // "YYYY-MM-DD" sorts chronologically
+  const segments: { coords: [string, number][] }[] = [];
+  for (let i = 1; i < days.length; i++) {
+    const prev = byDay.get(days[i - 1])!;
+    const cur = byDay.get(days[i])!;
+    for (const a of prev) {
+      for (const b of cur) {
+        segments.push({ coords: [[a.t, a.v], [b.t, b.v]] });
+      }
+    }
+  }
+  return segments;
+}
+
+// Item tooltip for a per-entry point: "Fri 8/29, 7:14 AM" over the value. The
+// dot's value is [isoTimestamp, number]; `unit` is appended (e.g. "lb", "/ 10").
+function entryTooltip(unit: string): object {
+  return {
+    trigger: "item",
+    formatter: (p: { value: [string, number] }) => {
+      const when = new Date(p.value[0]).toLocaleString(undefined, {
+        weekday: "short",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      return `${when}<br/><strong>${p.value[1]} ${unit}</strong>`;
+    },
+  };
+}
+
+// Shared series for a per-entry tracker (weight/mood): the fan-out segments as a
+// `lines` series, plus a `scatter` series for the (clickable) dots on top.
+function connectedDaySeries(points: EntryPoint[], color: string): object[] {
+  return [
+    {
+      type: "lines",
+      coordinateSystem: "cartesian2d",
+      polyline: false,
+      silent: true,
+      lineStyle: { color, width: 2, opacity: 0.9 },
+      data: daySegments(points),
+      z: 1,
+    },
+    {
+      type: "scatter",
+      symbolSize: 8,
+      itemStyle: { color },
+      // Keep the local day on each dot so a click drills into that day.
+      data: points.map((p) => ({ value: [p.t, p.v], date: p.day })),
+      z: 2,
+    },
+  ];
+}
+
+function weightOption(series: WeightSeries, start: string, end: string, dark: boolean): object {
+  const n = neutrals(dark);
+  const points: EntryPoint[] = series.items.map((p) => ({
+    t: p.measured_at,
+    v: Number(p.weight),
+    day: localDayOf(p.measured_at),
+  }));
+  return {
     grid: baseGrid,
-    tooltip: { trigger: "item" },
-    xAxis: dayCategoryAxis(days, dark),
+    tooltip: entryTooltip("lb"),
+    xAxis: dayTimeAxis(start, end, dark),
     yAxis: {
       type: "value",
       scale: true,
@@ -207,32 +306,21 @@ function weightOption(series: WeightSeries, days: string[], dark: boolean): obje
       axisLabel: { color: n.axis },
       splitLine: { lineStyle: { color: n.split } },
     },
-    series: [
-      {
-        type: "line",
-        showSymbol: true,
-        symbolSize: 9,
-        lineStyle: { width: 2 },
-        color: COLOR.weight,
-        // A point per weigh-in on its day's column, connected day-to-day. Two
-        // weigh-ins on the same day are two dots on the same x at different
-        // heights (the line runs near-vertical between them, since points are
-        // ordered oldest-first).
-        data: series.items.map((p) => {
-          const day = localDayOf(p.measured_at);
-          return { value: [day, Number(p.weight)], date: day };
-        }),
-      },
-    ],
+    series: connectedDaySeries(points, COLOR.weight),
   };
 }
 
-function moodOption(series: MoodSeries, days: string[], dark: boolean): object {
+function moodOption(series: MoodSeries, start: string, end: string, dark: boolean): object {
   const n = neutrals(dark);
+  const points: EntryPoint[] = series.items.map((p) => ({
+    t: p.recorded_at,
+    v: p.mood_score,
+    day: localDayOf(p.recorded_at),
+  }));
   return {
     grid: baseGrid,
-    tooltip: { trigger: "item" },
-    xAxis: dayCategoryAxis(days, dark),
+    tooltip: entryTooltip("/ 10"),
+    xAxis: dayTimeAxis(start, end, dark),
     yAxis: {
       type: "value",
       min: 1,
@@ -242,21 +330,7 @@ function moodOption(series: MoodSeries, days: string[], dark: boolean): object {
       axisLabel: { color: n.axis },
       splitLine: { lineStyle: { color: n.split } },
     },
-    series: [
-      {
-        type: "line",
-        showSymbol: true,
-        symbolSize: 9,
-        lineStyle: { width: 2 },
-        color: COLOR.mood,
-        // Every reading on its day's column, connected day-to-day; multiple
-        // readings a day = multiple dots on the same x.
-        data: series.items.map((p) => {
-          const day = localDayOf(p.recorded_at);
-          return { value: [day, p.mood_score], date: day };
-        }),
-      },
-    ],
+    series: connectedDaySeries(points, COLOR.mood),
   };
 }
 
@@ -512,7 +586,7 @@ export default component$(() => {
             {hasWeight ? (
               <Chart
                 class="h-72 w-full"
-                option={noSerialize(weightOption(weight.value!, days, dark.value))}
+                option={noSerialize(weightOption(weight.value!, start.value, end.value, dark.value))}
                 onPointClick$={openDay}
               />
             ) : (
@@ -548,7 +622,7 @@ export default component$(() => {
             {hasMood ? (
               <Chart
                 class="h-72 w-full"
-                option={noSerialize(moodOption(mood.value!, days, dark.value))}
+                option={noSerialize(moodOption(mood.value!, start.value, end.value, dark.value))}
                 onPointClick$={openDay}
               />
             ) : (
