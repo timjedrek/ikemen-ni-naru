@@ -551,10 +551,10 @@ export default component$(() => {
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 class="text-2xl font-bold tracking-tight text-foreground">
-              Your trends
+              Dashboard
             </h1>
             <p class="mt-0.5 text-sm text-muted">
-              Click any point to open that day's full breakdown.
+              Are you on track with your goals?
             </p>
           </div>
           <div class="flex flex-wrap items-end gap-3">

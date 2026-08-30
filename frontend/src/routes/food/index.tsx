@@ -245,10 +245,10 @@ export default component$(() => {
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 class="text-2xl font-bold tracking-tight text-foreground">
-              Your day
+              Food tracking
             </h1>
             <p class="mt-0.5 text-sm text-muted">
-              Track what you eat and watch your macros add up.
+              You sure you need to eat that?
             </p>
           </div>
           <label class="flex items-center gap-2 text-sm font-medium text-foreground">
