@@ -1,8 +1,13 @@
 # Build Plan — Updated for Deployment
 
 **Goal:** ship the app. The core is done (auth + full CRUD for food, weight,
-mood, sleep). What's left is the payoff (a charts dashboard), one genuinely
-useful feature (goals), and getting it live on Linode via Dokku.
+mood, sleep) and the payoff (a charts dashboard) is built. What's left before
+deploy is letting a user edit their own account (name / email / password) and
+getting it live on Linode via Dokku.
+
+Goals were originally slated here as Phase B but have been **deferred to
+[`future-features.md`](future-features.md)** — they're a nice feature, not a
+blocker for a live, usable app.
 
 Everything that isn't on the path to a live, usable app has moved to
 [`future-features.md`](future-features.md). This file is the road to deploy.
@@ -83,22 +88,41 @@ clicking a point opens that day's full breakdown.
 
 ---
 
-## Phase B — Goals
+## Phase B — Account settings
 
-One current goal record per user (not date-historical — that's deferred).
+Let a signed-in user edit their own account. No new tables — everything lives on
+the existing `users` row. Reuses the auth slice (`/api/v1/auth/*`, the session
+cookie, `get_current_user`) rather than a new resource.
+
+Scope is deliberately just **name, email, password** — timezone is left out on
+purpose (the app stores UTC instants and displays in the browser's local zone;
+the `users.timezone` column stays `"UTC"`, so surfacing it would add complexity
+with no payoff today). Account deletion and password reset stay in
+`future-features.md`.
 
 ### B1. Backend
-- `user_goals` table + migration: daily **calorie** target (+ optional
-  protein/carb/fat), target **weight**, target **sleep** duration/night.
-- `GET` / `PUT /api/v1/goals` (upsert), owner-scoped.
+- `PATCH /api/v1/auth/me` — update `display_name` and/or `email`. Email is
+  normalized and re-checked for uniqueness (friendly 409, DB constraint is the
+  authority). Changing the email requires the **current password** for
+  confirmation.
+- `POST /api/v1/auth/password` — change password: verify current password, then
+  set the new one (min-length enforced as at registration). On success,
+  **revoke all other sessions** for the user (keep the current one) so a leaked
+  old password can't hold a live session.
+- No new migration — reuses the `users` table.
 
 ### B2. Frontend
-- A simple **settings/goals** form to set them.
-- Surface goals on the dashboard: goal reference lines on the food (calories),
-  weight, and sleep charts. Neutral wording — it's tracking, not judgment.
+- A `/settings` (account) page, auth-gated, matching the existing log-page
+  chrome (top bar, `LogNav`, theme toggle). Two sections:
+  - **Profile** — edit display name + email (email change asks for current
+    password).
+  - **Password** — current + new + confirm.
+- Reflect a saved name/email in the "Signed in as" label. Add a link to reach
+  the page (e.g. from the top bar).
 
-**Done when:** you can set calorie, weight, and sleep goals and see them drawn
-against your actual data.
+**Done when:** a signed-in user can change their display name, email, and
+password from the app, wrong-current-password is rejected, and changing the
+password drops the app's other sessions.
 
 ---
 

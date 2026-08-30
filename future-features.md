@@ -23,6 +23,28 @@ Not full coverage, just the parts where a bug is dangerous:
 
 ---
 
+## Goals
+(Was Phase B in the deployment plan; deferred — a nice feature, not a blocker
+for a live app.) One current goal record per user (not date-historical — see
+"Further-out ideas").
+- **Backend:** `user_goals` table + migration: daily **calorie** target (+
+  optional protein/carb/fat), target **weight**, target **sleep**
+  duration/night. `GET` / `PUT /api/v1/goals` (upsert), owner-scoped.
+- **Frontend:** a simple goals form; then surface goals on the dashboard as
+  reference lines on the food (calories), weight, and sleep charts. Neutral
+  wording — it's tracking, not judgment.
+
+## Dashboard day-boundary uses UTC, not the browser zone
+Latent inconsistency, not a bug that's bitten yet. Entries are stored as UTC
+instants and the log pages read/display them in the **browser's** local zone,
+but the dashboard's "which calendar day" bucketing (`crud/analytics.py`) uses
+the stored `users.timezone`, which is hard-defaulted to `"UTC"` for everyone and
+never written. So at day boundaries a late-evening local entry can land on the
+"next day" in the dashboard. Fix options: either persist a real per-user
+timezone and set it (would also mean adding it to the account-settings page), or
+have the dashboard bucket in a client-supplied zone. Deferred deliberately — the
+account-settings work skips timezone to avoid this complexity for now.
+
 ## Security hardening
 (Original Phase 16.) Much of this is already partly in place; this is the
 review + tightening pass.
@@ -57,7 +79,8 @@ add to today. Keep templates and historical entries in separate tables.
 - Personal-data export (JSON first — preserves structure — then CSV).
 - Account deletion: re-auth required, transactional delete of owned data,
   session revocation.
-- Password change (current + new + confirm, session revocation policy).
+- ~~Password change~~ — done pre-deploy (Phase B, account settings). Name/email
+  editing landed with it.
 - Password reset by email (needs email infra — lower priority).
 
 ## Frontend design system & accessibility
