@@ -1,5 +1,5 @@
 import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
-import { useNavigate } from "@builder.io/qwik-city";
+import { useLocation, useNavigate } from "@builder.io/qwik-city";
 import { AppHeader } from "~/components/app-header/app-header";
 import {
   ApiError,
@@ -95,6 +95,7 @@ const inputClass =
 
 export default component$(() => {
   const nav = useNavigate();
+  const loc = useLocation();
   // Auth gate: null until checked. We render nothing app-related until the
   // check resolves, so protected data never flashes before a possible redirect.
   const authUser = useSignal<User | null>(null);
@@ -136,15 +137,24 @@ export default component$(() => {
     }
     authUser.value = user;
     authChecked.value = true;
-    selectedDate.value = todayIso(); // triggers the load task below
+    // Honor a deep link from the day report (?date=<day>) so its edit link lands
+    // on the right day; otherwise default to today. Triggers the load task below.
+    selectedDate.value = loc.url.searchParams.get("date") || todayIso();
   });
 
   // Reload whenever the selected date changes — but only once authenticated.
   // eslint-disable-next-line qwik/no-use-visible-task
-  useVisibleTask$(({ track }) => {
+  useVisibleTask$(async ({ track }) => {
     const date = track(() => selectedDate.value);
     if (!authChecked.value || !date) return;
-    reload();
+    await reload();
+    // Deep link (?edit=<id>): once this date's entries are loaded, open that
+    // entry's edit form. No-op if the id isn't among this day's entries.
+    const editId = Number(loc.url.searchParams.get("edit"));
+    if (editId) {
+      const entry = data.value?.items.find((e) => e.id === editId);
+      if (entry) await startEdit(entry);
+    }
   });
 
 

@@ -8,6 +8,7 @@ import {
 } from "@builder.io/qwik";
 import { Link, useLocation, useNavigate } from "@builder.io/qwik-city";
 import { AppHeader } from "~/components/app-header/app-header";
+import { DayTimeline } from "~/components/day-timeline/day-timeline";
 import {
   deleteFoodEntry,
   deleteMoodEntry,
@@ -245,6 +246,12 @@ export default component$(() => {
         )}
         {loading.value && <p class="mb-4 text-sm text-muted">Loading…</p>}
 
+        {d && !isEmpty && (
+          <div class="mb-8">
+            <DayTimeline detail={d} />
+          </div>
+        )}
+
         {isEmpty && (
           <div class="rounded-2xl border border-dashed border-line bg-surface/50 px-6 py-14 text-center">
             <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-2xl dark:bg-brand-500/15">
@@ -273,6 +280,7 @@ export default component$(() => {
                       meta={`${e.calories} kcal · P ${e.protein_g}g · C ${e.carb_g}g · F ${e.fat_g}g`}
                       sub={e.serving_description}
                       notes={e.notes}
+                      onEdit$={() => nav(`/food?date=${e.entry_date}&edit=${e.id}`)}
                       onDelete$={() => removeFood(e.id)}
                     />
                   ))}
@@ -291,6 +299,7 @@ export default component$(() => {
                       badge={`quality ${e.quality_score}/10`}
                       meta={`${formatDateTime(e.started_at)} → ${formatDateTime(e.ended_at)}`}
                       notes={e.notes}
+                      onEdit$={() => nav(`/sleep?edit=${e.id}`)}
                       onDelete$={() => removeSleep(e.id)}
                     />
                   ))}
@@ -308,6 +317,7 @@ export default component$(() => {
                       title={`${e.mood_score}/10`}
                       meta={formatDateTime(e.recorded_at)}
                       notes={e.notes}
+                      onEdit$={() => nav(`/mood?edit=${e.id}`)}
                       onDelete$={() => removeMood(e.id)}
                     />
                   ))}
@@ -325,6 +335,7 @@ export default component$(() => {
                       title={`${e.weight} ${e.unit}`}
                       meta={formatDateTime(e.measured_at)}
                       notes={e.notes}
+                      onEdit$={() => nav(`/weight?edit=${e.id}`)}
                       onDelete$={() => removeWeight(e.id)}
                     />
                   ))}
@@ -350,6 +361,7 @@ export default component$(() => {
                       meta={`${formatTime(e.created_at)} · ${e.calories} kcal · P ${e.protein_g}g · C ${e.carb_g}g · F ${e.fat_g}g`}
                       sub={e.serving_description}
                       notes={e.notes}
+                      onEdit$={() => nav(`/food?date=${e.entry_date}&edit=${e.id}`)}
                       onDelete$={() => removeFood(e.id)}
                     />
                   );
@@ -364,6 +376,7 @@ export default component$(() => {
                       badge={`quality ${e.quality_score}/10`}
                       meta={`${formatTime(e.started_at)} → ${formatTime(e.ended_at)}`}
                       notes={e.notes}
+                      onEdit$={() => nav(`/sleep?edit=${e.id}`)}
                       onDelete$={() => removeSleep(e.id)}
                     />
                   );
@@ -377,6 +390,7 @@ export default component$(() => {
                       title={`${e.mood_score}/10`}
                       meta={formatTime(e.recorded_at)}
                       notes={e.notes}
+                      onEdit$={() => nav(`/mood?edit=${e.id}`)}
                       onDelete$={() => removeMood(e.id)}
                     />
                   );
@@ -390,6 +404,7 @@ export default component$(() => {
                       title={`${e.weight} ${e.unit}`}
                       meta={formatTime(e.measured_at)}
                       notes={e.notes}
+                      onEdit$={() => nav(`/weight?edit=${e.id}`)}
                       onDelete$={() => removeWeight(e.id)}
                     />
                   );
@@ -402,6 +417,42 @@ export default component$(() => {
     </div>
   );
 });
+
+// Inline action icons (Heroicons outline). Kept local — they're only used by
+// the entry cards on this page.
+const PencilIcon = component$(() => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width={1.8}
+    class="h-4 w-4"
+    aria-hidden="true"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Z"
+    />
+  </svg>
+));
+
+const TrashIcon = component$(() => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width={1.8}
+    class="h-4 w-4"
+    aria-hidden="true"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.16-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.04-2.09 1.02-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+    />
+  </svg>
+));
 
 // A tracker section with a heading that links to the full log page (where
 // entries are edited).
@@ -436,8 +487,9 @@ const Row = component$<{
   meta: string;
   sub?: string | null;
   notes?: string | null;
+  onEdit$?: QRL<() => void>;
   onDelete$: QRL<() => void>;
-}>(({ title, kind, badge, meta, sub, notes, onDelete$ }) => {
+}>(({ title, kind, badge, meta, sub, notes, onEdit$, onDelete$ }) => {
   return (
     <li class="rounded-xl bg-surface p-4 shadow-sm ring-1 ring-line">
       <div class="flex items-start justify-between gap-3">
@@ -460,13 +512,28 @@ const Row = component$<{
           {sub && <p class="mt-0.5 text-sm text-muted">{sub}</p>}
           <p class="mt-1 text-sm text-muted">{meta}</p>
         </div>
-        <button
-          type="button"
-          onClick$={onDelete$}
-          class="shrink-0 rounded-md px-2.5 py-1 text-xs font-medium text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-400 dark:ring-red-900/50 dark:hover:bg-red-950/40"
-        >
-          Delete
-        </button>
+        <div class="flex shrink-0 gap-1">
+          {onEdit$ && (
+            <button
+              type="button"
+              onClick$={onEdit$}
+              aria-label="Edit entry"
+              title="Edit"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
+            >
+              <PencilIcon />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick$={onDelete$}
+            aria-label="Delete entry"
+            title="Delete"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-400 dark:ring-red-900/50 dark:hover:bg-red-950/40"
+          >
+            <TrashIcon />
+          </button>
+        </div>
       </div>
       {notes && (
         <p class="mt-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">

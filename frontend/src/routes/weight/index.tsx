@@ -1,5 +1,5 @@
 import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
-import { useNavigate } from "@builder.io/qwik-city";
+import { useLocation, useNavigate } from "@builder.io/qwik-city";
 import { AppHeader } from "~/components/app-header/app-header";
 import {
   ApiError,
@@ -32,6 +32,7 @@ const inputClass =
 
 export default component$(() => {
   const nav = useNavigate();
+  const loc = useLocation();
   // Auth gate: null until checked. We render nothing app-related until the
   // check resolves, so protected data never flashes before a possible redirect.
   const authUser = useSignal<User | null>(null);
@@ -70,6 +71,13 @@ export default component$(() => {
     authUser.value = user;
     authChecked.value = true;
     await reload();
+    // Deep link from the day report (?edit=<id>): open that entry's edit form
+    // once the list is loaded. No-op if the id isn't in the recent list.
+    const editId = Number(loc.url.searchParams.get("edit"));
+    if (editId) {
+      const entry = items.value.find((e) => e.id === editId);
+      if (entry) await startEdit(entry);
+    }
   });
 
 

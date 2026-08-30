@@ -5,6 +5,35 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Day report: timeline chart + feed edit buttons (icons) + deep-link editing
+
+**Timeline (`frontend/src/components/day-timeline/day-timeline.tsx`, new):** a
+horizontal one-day chart pinned to the top of the report (both views). Window is
+**5 AM → midnight** (`START_HOUR`/`END_HOUR`), hour ticks at 5/9/13/17/21/24
+(edge labels aligned inward so they don't overflow). Point entries
+(food/mood/weight) render as colored pins, sleep as a labelled violet span over
+the track; out-of-window times clamp to the nearest edge rather than drop.
+Offsets are hours from the day's local midnight. Pure/presentational and only
+renders client-side (day page loads in a visible task), so local-time Date math
+can't cause a hydration mismatch. Food is placed by `created_at` (no eaten-time),
+consistent with the feed.
+
+**Feed action buttons (`frontend/src/routes/day/[date]/index.tsx`):** `Row` now
+takes an optional `onEdit$` and renders **icon** buttons (local `PencilIcon` /
+`TrashIcon`, Heroicons outline) instead of the old text "Delete" link — applied
+to both the grouped and time views.
+
+**Deep-link editing (option 1):** the Edit icon navigates to the entry's tracker
+page with `?edit=<id>` (food also gets `&date=<entry_date>` since its list is
+date-scoped). Each tracker page (`food`/`sleep`/`mood`/`weight`) now reads the
+param in its load task and calls `startEdit` on the matching entry once loaded
+(food first sets `selectedDate` from `?date`, defaulting to today). No-op if the
+id isn't in the loaded list. Added `useLocation` to all four. **Note:** the edit
+param persists in the URL, so a manual date change on the food page can re-open
+the form if that entry is on the newly selected day — acceptable for now.
+
+---
+
 ## 2026-08-29 — Day report: "By category" / "By time" view toggle + feed
 
 **Goal:** the day report (`/day/[date]`) was grouped by tracker (Food / Sleep /
