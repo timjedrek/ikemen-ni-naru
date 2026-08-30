@@ -210,38 +210,6 @@ export default component$(() => {
               {formatDayHeading(loc.params.date)}
             </h1>
           </div>
-
-          {/* View switch: keep the grouped view (default) or read the day as a
-              single time-ordered feed. Hidden when there's nothing to show. */}
-          {d && !isEmpty && (
-            <div
-              role="tablist"
-              aria-label="Day view"
-              class="inline-flex rounded-lg bg-surface-muted p-1 ring-1 ring-line"
-            >
-              {(
-                [
-                  ["category", "By category"],
-                  ["time", "By time"],
-                ] as [DayView, string][]
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={view.value === value}
-                  onClick$={() => (view.value = value)}
-                  class={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    view.value === value
-                      ? "bg-surface text-foreground shadow-sm"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {error.value && (
@@ -274,35 +242,62 @@ export default component$(() => {
           </div>
         )}
 
-        {/* Jump bar: sticks just under the app header while scrolling the
-            grouped view, so a section is always one tap away. */}
-        {d && !isEmpty && view.value === "category" && (
-          <nav
-            aria-label="Jump to section"
-            class="sticky top-16 z-10 mb-8 py-3"
-          >
-            <div class="flex flex-wrap gap-2">
+        {/* Sticky controls row under the timeline: jump buttons (category view
+            only) left, view switch right. Renders in both views so the switch
+            stays reachable from the time view. */}
+        {d && !isEmpty && (
+          <div class="sticky top-16 z-10 mb-8 flex flex-wrap items-center justify-between gap-3 py-3">
+            <nav aria-label="Jump to section" class="flex flex-wrap gap-2">
+              {view.value === "category" &&
+                (
+                  [
+                    ["food", "Food"],
+                    ["sleep", "Sleep"],
+                    ["mood", "Mood"],
+                    ["weight", "Weight"],
+                  ] as [keyof Pick<DayDetail, "food" | "sleep" | "mood" | "weight">, string][]
+                )
+                  .filter(([key]) => d[key].length > 0)
+                  .map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick$={() => jumpTo(key)}
+                      class="rounded-full bg-surface-muted px-3 py-1.5 text-sm font-medium text-muted ring-1 ring-line transition-colors hover:bg-surface hover:text-foreground"
+                    >
+                      {label}
+                    </button>
+                  ))}
+            </nav>
+
+            <div
+              role="tablist"
+              aria-label="Day view"
+              class="inline-flex rounded-lg bg-surface-muted p-1 ring-1 ring-line"
+            >
               {(
                 [
-                  ["food", "Food"],
-                  ["sleep", "Sleep"],
-                  ["mood", "Mood"],
-                  ["weight", "Weight"],
-                ] as [keyof Pick<DayDetail, "food" | "sleep" | "mood" | "weight">, string][]
-              )
-                .filter(([key]) => d[key].length > 0)
-                .map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick$={() => jumpTo(key)}
-                    class="rounded-full bg-surface-muted px-3 py-1.5 text-sm font-medium text-muted ring-1 ring-line transition-colors hover:bg-surface hover:text-foreground"
-                  >
-                    {label}
-                  </button>
-                ))}
+                  ["category", "By category"],
+                  ["time", "By time"],
+                ] as [DayView, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={view.value === value}
+                  onClick$={() => (view.value = value)}
+                  class={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    view.value === value
+                      ? "bg-surface text-foreground shadow-sm"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-          </nav>
+          </div>
         )}
 
         {d && !isEmpty && view.value === "category" && (
