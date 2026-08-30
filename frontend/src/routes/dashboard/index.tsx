@@ -9,6 +9,7 @@ import {
 import { Link, useNavigate } from "@builder.io/qwik-city";
 import { Chart, type ChartClickParams } from "~/components/chart/chart";
 import { AppHeader } from "~/components/app-header/app-header";
+import { DayFeed } from "~/components/day-feed/day-feed";
 import {
   getCurrentUser,
   getFoodAnalytics,
@@ -513,6 +514,9 @@ export default component$(() => {
   const rangeDays = useSignal<number | null>(DEFAULT_RANGE);
   const start = useSignal(startForRange(DEFAULT_RANGE));
   const end = useSignal(defaultEnd());
+  // Today's local date, for the "Today" feed at the bottom. Re-stamped
+  // client-side in the auth task so it reflects the user's zone, not the server.
+  const today = useSignal(defaultEnd());
 
   const food = useSignal<FoodSeries | null>(null);
   const weight = useSignal<WeightSeries | null>(null);
@@ -557,6 +561,7 @@ export default component$(() => {
     }
     authUser.value = user;
     dark.value = document.documentElement.classList.contains("dark");
+    today.value = defaultEnd();
     authChecked.value = true;
     await reload();
   });
@@ -722,6 +727,22 @@ export default component$(() => {
             )}
           </ChartCard>
         </div>
+
+        {/* Today's full breakdown — the same view as /day/[date], for today. */}
+        <section class="mt-12">
+          <div class="mb-6 flex items-center justify-between gap-3">
+            <h2 class="text-xl font-bold tracking-tight text-foreground">
+              Today
+            </h2>
+            <Link
+              href={`/day/${today.value}`}
+              class="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+            >
+              Open full day →
+            </Link>
+          </div>
+          <DayFeed date={today.value} />
+        </section>
       </main>
     </div>
   );

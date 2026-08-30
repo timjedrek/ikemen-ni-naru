@@ -5,8 +5,8 @@ import { Link, useLocation, useNavigate } from "@builder.io/qwik-city";
 // this nav lets the user move between them from any app bar. Hidden on small
 // screens to keep mobile chrome uncluttered (same treatment as the "Signed in
 // as" text).
-const LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
+export const LINKS = [
+  { href: "/dashboard", label: "Home" },
   { href: "/food", label: "Food" },
   { href: "/weight", label: "Weight" },
   { href: "/mood", label: "Mood" },
@@ -44,7 +44,7 @@ export const LogNav = component$(() => {
           onChange$={(_, el) => {
             if (el.value) nav(`/day/${el.value}`);
           }}
-          class="rounded-lg border-0 bg-surface px-2 py-1 text-foreground shadow-sm ring-1 ring-inset ring-line-strong focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
+          class="rounded-lg border-0 bg-surface px-2 py-1 text-foreground shadow-sm ring-1 ring-inset ring-line-strong [color-scheme:light] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 dark:[color-scheme:dark]"
         />
       </label>
     </nav>

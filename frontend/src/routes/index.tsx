@@ -4,7 +4,7 @@ import {
   useVisibleTask$,
 } from '@builder.io/qwik';
 import { Link } from '@builder.io/qwik-city';
-import { Logo } from '~/components/logo/logo';
+import { Logo, LogoStacked } from '~/components/logo/logo';
 import { ThemeToggle } from '~/components/theme-toggle/theme-toggle';
 import { getHealth } from '~/services/api';
 import type { HealthResponse } from '~/types/health';
@@ -33,7 +33,10 @@ export default component$(() => {
         <ThemeToggle />
       </div>
 
-      <Logo class="mb-5 h-32 w-auto self-start" />
+      {/* The horizontal lockup overflows narrow screens, so stack the wordmark
+          under the icon on mobile and switch to the wide lockup from sm up. */}
+      <LogoStacked class="mb-5 h-auto w-48 self-start sm:hidden" />
+      <Logo class="mb-5 hidden h-32 w-auto self-start sm:block" />
 
       <h1 class="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
         Health Tracker

@@ -46,6 +46,25 @@ export const LogoMark = component$<{ class?: string }>(({ class: cls }) => {
   );
 });
 
+// The Japanese wordmark. Split out so both the horizontal lockup and the
+// stacked (mobile) lockup share one definition. `x`/`y` place the baseline;
+// textLength pins the width so the size is deterministic regardless of which
+// system Japanese serif font is available.
+const Wordmark = component$<{ x: number; y: number }>(({ x, y }) => (
+  <text
+    x={x}
+    y={y}
+    textLength="1000"
+    lengthAdjust="spacingAndGlyphs"
+    font-family="'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', 'Noto Serif JP', serif"
+    font-size="150"
+    font-weight="600"
+  >
+    <tspan class="fill-slate-700 dark:fill-slate-100">イケメンに</tspan>
+    <tspan class="fill-accent-600 dark:fill-accent-400">なる</tspan>
+  </text>
+));
+
 /**
  * Full lockup — icon + Japanese wordmark. The neutral part of the wordmark
  * ("イケメンにな") uses theme-aware fills so it stays legible in dark mode; the
@@ -67,21 +86,33 @@ export const Logo = component$<{ class?: string }>(({ class: cls }) => {
       </defs>
 
       <IconTile gradientId={gid} />
+      <Wordmark x={362} y={207} />
+    </svg>
+  );
+});
 
-      {/* textLength pins the wordmark width so the lockup size is deterministic
-          regardless of which system Japanese serif font is available. */}
-      <text
-        x="362"
-        y="207"
-        textLength="1000"
-        lengthAdjust="spacingAndGlyphs"
-        font-family="'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', 'Noto Serif JP', serif"
-        font-size="150"
-        font-weight="600"
-      >
-        <tspan class="fill-slate-700 dark:fill-slate-100">イケメンに</tspan>
-        <tspan class="fill-accent-600 dark:fill-accent-400">なる</tspan>
-      </text>
+/**
+ * Stacked lockup — icon on top, wordmark beneath. Used on narrow screens where
+ * the horizontal lockup would overflow. Same pieces as {@link Logo}, just laid
+ * out vertically.
+ */
+export const LogoStacked = component$<{ class?: string }>(({ class: cls }) => {
+  const gid = useId();
+  return (
+    <svg
+      viewBox="0 0 1000 540"
+      class={cls}
+      role="img"
+      aria-label="イケメンになる — Ikemen ni Naru"
+    >
+      <defs>
+        <linearGradient id={gid} x1="6%" y1="6%" x2="94%" y2="94%">
+          <GradientStops />
+        </linearGradient>
+      </defs>
+
+      <IconTile gradientId={gid} />
+      <Wordmark x={0} y={499} />
     </svg>
   );
 });

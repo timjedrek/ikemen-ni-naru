@@ -5,6 +5,45 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Mobile responsiveness + "Today" feed on the home page
+
+Post-deploy mobile pass plus a home-page feed.
+
+**Home page overflow (`frontend/src/components/logo/logo.tsx`,
+`frontend/src/routes/index.tsx`):** the horizontal logo lockup (icon + Japanese
+wordmark, `viewBox 0 0 1400 309`) overflowed narrow screens, causing horizontal
+scroll. Extracted the wordmark into a shared `Wordmark` and added a `LogoStacked`
+export (icon on top, wordmark beneath, `viewBox 0 0 1000 540`). The landing page
+renders `LogoStacked` below `sm` and the wide `Logo` from `sm` up.
+
+**Mobile nav (`frontend/src/components/app-header/app-header.tsx`,
+`frontend/src/components/log-nav/log-nav.tsx`):** the app header had no nav links
+on mobile (`LogNav` is `hidden sm:flex`). Exported `LINKS` from `log-nav` and
+added a hamburger toggle that replaces the logout button below `sm` (turns into
+an X when open). It opens a dropdown with the nav links, Account settings, the
+"Jump to date" day-report picker, and Log out. Desktop keeps the plain logout
+button.
+
+**Reusable `DayFeed` + "Today" on the dashboard
+(`frontend/src/components/day-feed/day-feed.tsx`,
+`frontend/src/routes/day/[date]/index.tsx`,
+`frontend/src/routes/dashboard/index.tsx`):** extracted the entire day breakdown
+(summary timeline, By category/By time switch, per-entry edit/delete cards, empty
+state) out of the `/day/[date]` page into a `DayFeed` component keyed off a `date`
+prop; it owns its own load/delete/view state and reloads when `date` changes. The
+day page now just renders `<DayFeed date={loc.params.date} />`. Added a "Today"
+section at the bottom of the dashboard rendering `<DayFeed date={today} />` with
+an "Open full day →" link; `today` is stamped client-side (auth task) so it uses
+the user's zone, not the server's.
+
+**Copy + dark-mode polish:** renamed the "Dashboard" nav link to "Home" (drives
+both desktop and mobile nav; the day page's back link now reads "← Back to home").
+The native date picker's calendar icon was invisible in dark mode — added
+`[color-scheme:light] dark:[color-scheme:dark]` to both nav date inputs so the
+icon is black in light mode and light in dark mode.
+
+---
+
 ## 2026-08-30 — Fix: after-8 PM naps rendered below the sleep chart axis
 
 **Bug:** the sleep chart's columns run 8 PM → 8 PM (`Y_MIN = -4`, `Y_MAX = 20`),
