@@ -39,8 +39,12 @@ function localDateIso(d: Date): string {
 
 const DAY_MS = 86_400_000;
 
-function defaultStart(): string {
-  return localDateIso(new Date(Date.now() - 29 * DAY_MS)); // last 30 days incl. today
+// Selectable look-back windows (days), including today. 7 is the default.
+const RANGE_OPTIONS = [7, 14, 30, 60, 90] as const;
+const DEFAULT_RANGE = 7;
+
+function startForRange(days: number): string {
+  return localDateIso(new Date(Date.now() - (days - 1) * DAY_MS));
 }
 function defaultEnd(): string {
   return localDateIso(new Date());
@@ -84,10 +88,13 @@ function hoursFromMidnight(iso: string, dayIso: string): number {
   return (new Date(iso).getTime() - midnight) / 3_600_000;
 }
 
-// Clock-time y-axis label: 7 → "07:00", -1 → "23:00".
+// Clock-time y-axis label in 12-hour form so evening vs. morning is obvious as
+// the axis crosses midnight: -3 → "9 PM", 0 → "12 AM", 6 → "6 AM", 9 → "9 AM".
 function clockLabel(hour: number): string {
   const h = ((Math.round(hour) % 24) + 24) % 24;
-  return `${String(h).padStart(2, "0")}:00`;
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12} ${period}`;
 }
 
 // --- chart palette ----------------------------------------------------------
@@ -193,38 +200,35 @@ function dayCategoryAxis(days: string[], dark: boolean): object {
   };
 }
 
-// Shared x-axis for the per-entry trackers (weight/mood): a real time axis
-// spanning the selected window. Unlike the day-category axis, each reading sits
-// at its own instant, so several readings in one day are distinct points and the
-// line connects through *all* of them in chronological order — matching the
-// hand-drawn reference where the line never skips a point.
-function dayTimeAxis(start: string, end: string, dark: boolean): object {
-  const n = neutrals(dark);
-  return {
-    type: "time",
-    // Pin the window to the selected range so the line spans the whole month
-    // rather than just the first/last reading.
-    min: `${start}T00:00:00`,
-    max: `${end}T23:59:59`,
-    axisLabel: { color: n.axis, hideOverlap: true, formatter: "{M}/{d}" },
-    axisLine: { lineStyle: { color: n.split } },
-    axisTick: { show: false },
-    splitLine: { show: false },
-  };
-}
+// One reading, flattened for charting: the index of its day-column (`xi`), its
+// real instant (`t`, for the tooltip), value (`v`), and the local day it belongs
+// to. Position is by day-column, not by clock time, so every day is evenly
+// spaced and multiple readings a day stack on the same column.
+type EntryPoint = { xi: number; t: string; v: number; day: string };
 
-// One reading, flattened for charting: its instant (`t`), value (`v`), and the
-// local day it belongs to.
-type EntryPoint = { t: string; v: number; day: string };
+// Flatten a tracker's items into day-column points, dropping anything outside
+// the visible range.
+function toDayPoints(
+  items: { t: string; v: number }[],
+  days: string[],
+): EntryPoint[] {
+  return items
+    .map(({ t, v }) => {
+      const day = localDayOf(t);
+      const xi = days.indexOf(day);
+      return xi < 0 ? null : { xi, t, v, day };
+    })
+    .filter((p): p is EntryPoint => p !== null);
+}
 
 // Build the day-to-day connecting segments. A single polyline can't express
 // "the 28th connects to *both* the 29th's readings" — it would just thread
 // 240 → 245 → 242. So instead we fully connect each day's points to the next
 // day's points (a bipartite join): every dot on day N gets a line to every dot
 // on day N+1. Multiple readings a day therefore fan out into the diamond/zigzag
-// shapes from the hand-drawn reference. "Next day" means the next day that has
-// data, so gaps stay bridged and the line reads as continuous.
-function daySegments(points: EntryPoint[]): { coords: [string, number][] }[] {
+// shapes from the hand-drawn reference. "Next day" means the next day-column
+// that has data, so gaps stay bridged and the line reads as continuous.
+function daySegments(points: EntryPoint[]): { coords: [number, number][] }[] {
   const byDay = new Map<string, EntryPoint[]>();
   for (const p of points) {
     const bucket = byDay.get(p.day);
@@ -232,13 +236,13 @@ function daySegments(points: EntryPoint[]): { coords: [string, number][] }[] {
     else byDay.set(p.day, [p]);
   }
   const days = [...byDay.keys()].sort(); // "YYYY-MM-DD" sorts chronologically
-  const segments: { coords: [string, number][] }[] = [];
+  const segments: { coords: [number, number][] }[] = [];
   for (let i = 1; i < days.length; i++) {
     const prev = byDay.get(days[i - 1])!;
     const cur = byDay.get(days[i])!;
     for (const a of prev) {
       for (const b of cur) {
-        segments.push({ coords: [[a.t, a.v], [b.t, b.v]] });
+        segments.push({ coords: [[a.xi, a.v], [b.xi, b.v]] });
       }
     }
   }
@@ -246,19 +250,20 @@ function daySegments(points: EntryPoint[]): { coords: [string, number][] }[] {
 }
 
 // Item tooltip for a per-entry point: "Fri 8/29, 7:14 AM" over the value. The
-// dot's value is [isoTimestamp, number]; `unit` is appended (e.g. "lb", "/ 10").
+// real timestamp rides along on the dot's data as `t` (the x-position is only a
+// day index); `unit` is appended (e.g. "lb", "/ 10").
 function entryTooltip(unit: string): object {
   return {
     trigger: "item",
-    formatter: (p: { value: [string, number] }) => {
-      const when = new Date(p.value[0]).toLocaleString(undefined, {
+    formatter: (p: { data: { t: string; value: [number, number] } }) => {
+      const when = new Date(p.data.t).toLocaleString(undefined, {
         weekday: "short",
         month: "numeric",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
       });
-      return `${when}<br/><strong>${p.value[1]} ${unit}</strong>`;
+      return `${when}<br/><strong>${p.data.value[1]} ${unit}</strong>`;
     },
   };
 }
@@ -280,24 +285,24 @@ function connectedDaySeries(points: EntryPoint[], color: string): object[] {
       type: "scatter",
       symbolSize: 8,
       itemStyle: { color },
-      // Keep the local day on each dot so a click drills into that day.
-      data: points.map((p) => ({ value: [p.t, p.v], date: p.day })),
+      // Keep the local day (for click drill-down) and real instant (for the
+      // tooltip) on each dot; the value's x is just the day-column index.
+      data: points.map((p) => ({ value: [p.xi, p.v], date: p.day, t: p.t })),
       z: 2,
     },
   ];
 }
 
-function weightOption(series: WeightSeries, start: string, end: string, dark: boolean): object {
+function weightOption(series: WeightSeries, days: string[], dark: boolean): object {
   const n = neutrals(dark);
-  const points: EntryPoint[] = series.items.map((p) => ({
-    t: p.measured_at,
-    v: Number(p.weight),
-    day: localDayOf(p.measured_at),
-  }));
+  const points = toDayPoints(
+    series.items.map((p) => ({ t: p.measured_at, v: Number(p.weight) })),
+    days,
+  );
   return {
     grid: baseGrid,
     tooltip: entryTooltip("lb"),
-    xAxis: dayTimeAxis(start, end, dark),
+    xAxis: dayCategoryAxis(days, dark),
     yAxis: {
       type: "value",
       scale: true,
@@ -310,17 +315,16 @@ function weightOption(series: WeightSeries, start: string, end: string, dark: bo
   };
 }
 
-function moodOption(series: MoodSeries, start: string, end: string, dark: boolean): object {
+function moodOption(series: MoodSeries, days: string[], dark: boolean): object {
   const n = neutrals(dark);
-  const points: EntryPoint[] = series.items.map((p) => ({
-    t: p.recorded_at,
-    v: p.mood_score,
-    day: localDayOf(p.recorded_at),
-  }));
+  const points = toDayPoints(
+    series.items.map((p) => ({ t: p.recorded_at, v: p.mood_score })),
+    days,
+  );
   return {
     grid: baseGrid,
     tooltip: entryTooltip("/ 10"),
-    xAxis: dayTimeAxis(start, end, dark),
+    xAxis: dayCategoryAxis(days, dark),
     yAxis: {
       type: "value",
       min: 1,
@@ -358,12 +362,14 @@ function sleepOption(series: SleepSeries, days: string[], dark: boolean): object
     })
     .filter((p): p is { value: number[]; date: string } => p !== null);
 
-  // Fit the y-axis to the data with a little padding, but keep a sensible
-  // default window (evening → late morning) when there's little/no data.
-  const starts = points.map((p) => p.value[1]);
-  const ends = points.map((p) => p.value[2]);
-  const yMin = Math.floor(Math.min(-2, ...starts) - 1);
-  const yMax = Math.ceil(Math.max(10, ...ends) + 1);
+  // Fixed 24-hour window anchored at 8 PM, drawn top-to-bottom (`inverse`): 8 PM
+  // sits at the top, time flows down through midnight and morning to 8 PM the
+  // next day at the bottom. In hours-from-midnight terms that's -4 → 20. A fixed
+  // frame keeps every night comparable and stops a stray daytime nap from
+  // stretching/squishing the overnight bars. Ticks every 4h land on clean clock
+  // hours (8 PM, 12 AM, 4 AM, 8 AM, 12 PM, 4 PM, 8 PM).
+  const Y_MIN = -4;
+  const Y_MAX = 20;
 
   return {
     grid: { ...baseGrid, left: 56 },
@@ -371,9 +377,10 @@ function sleepOption(series: SleepSeries, days: string[], dark: boolean): object
     xAxis: dayCategoryAxis(days, dark),
     yAxis: {
       type: "value",
-      min: yMin,
-      max: yMax,
-      interval: 3,
+      min: Y_MIN,
+      max: Y_MAX,
+      interval: 4,
+      inverse: true,
       name: "time",
       nameTextStyle: { color: n.axis },
       axisLabel: { color: n.axis, formatter: clockLabel },
@@ -393,17 +400,20 @@ function sleepOption(series: SleepSeries, days: string[], dark: boolean): object
           },
         ) => {
           const dayIndex = api.value(0);
-          const top = api.coord([dayIndex, api.value(2)]); // wake time (higher y)
-          const bottom = api.coord([dayIndex, api.value(1)]); // sleep start
+          // Orientation-independent: take both endpoints' pixels and span from
+          // the smaller y down, so the bar draws correctly whether or not the
+          // axis is inverted.
+          const p1 = api.coord([dayIndex, api.value(1)]); // sleep start
+          const p2 = api.coord([dayIndex, api.value(2)]); // wake
           const bandWidth = api.size([1, 0])[0];
           const width = Math.max(6, bandWidth * 0.5);
           return {
             type: "rect",
             shape: {
-              x: top[0] - width / 2,
-              y: top[1],
+              x: p1[0] - width / 2,
+              y: Math.min(p1[1], p2[1]),
               width,
-              height: bottom[1] - top[1],
+              height: Math.abs(p2[1] - p1[1]),
               r: 3,
             },
             style: api.style(),
@@ -423,7 +433,9 @@ export default component$(() => {
   const authUser = useSignal<User | null>(null);
   const authChecked = useSignal(false);
 
-  const start = useSignal(defaultStart());
+  // The active preset (7/14/…); null when the user has picked a custom range.
+  const rangeDays = useSignal<number | null>(DEFAULT_RANGE);
+  const start = useSignal(startForRange(DEFAULT_RANGE));
   const end = useSignal(defaultEnd());
 
   const food = useSignal<FoodSeries | null>(null);
@@ -487,6 +499,13 @@ export default component$(() => {
     await nav("/login");
   });
 
+  // Switch the look-back window; the range-tracking task below reloads the data.
+  const setRange = $((days: number) => {
+    rangeDays.value = days;
+    end.value = defaultEnd();
+    start.value = startForRange(days);
+  });
+
   const openDay = $((params: ChartClickParams) => {
     if (params.date) nav(`/day/${params.date}`);
   });
@@ -548,13 +567,37 @@ export default component$(() => {
             </p>
           </div>
           <div class="flex flex-wrap items-end gap-3">
+            <div
+              role="group"
+              aria-label="Quick date range"
+              class="inline-flex rounded-lg bg-surface p-1 shadow-sm ring-1 ring-inset ring-line-strong"
+            >
+              {RANGE_OPTIONS.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  aria-pressed={rangeDays.value === days}
+                  onClick$={() => setRange(days)}
+                  class={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    rangeDays.value === days
+                      ? "bg-brand-600 text-white shadow-sm"
+                      : "text-muted hover:bg-surface-muted hover:text-foreground"
+                  }`}
+                >
+                  {days}d
+                </button>
+              ))}
+            </div>
             <label class="flex flex-col text-sm font-medium text-foreground">
               From
               <input
                 type="date"
                 value={start.value}
                 max={end.value}
-                onChange$={(_, el) => (start.value = el.value)}
+                onChange$={(_, el) => {
+                  start.value = el.value;
+                  rangeDays.value = null; // custom range: clear preset highlight
+                }}
                 class="mt-1 rounded-lg border-0 bg-surface px-3 py-2 text-foreground shadow-sm ring-1 ring-inset ring-line-strong focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
               />
             </label>
@@ -564,7 +607,10 @@ export default component$(() => {
                 type="date"
                 value={end.value}
                 min={start.value}
-                onChange$={(_, el) => (end.value = el.value)}
+                onChange$={(_, el) => {
+                  end.value = el.value;
+                  rangeDays.value = null;
+                }}
                 class="mt-1 rounded-lg border-0 bg-surface px-3 py-2 text-foreground shadow-sm ring-1 ring-inset ring-line-strong focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
               />
             </label>
@@ -586,7 +632,7 @@ export default component$(() => {
             {hasWeight ? (
               <Chart
                 class="h-72 w-full"
-                option={noSerialize(weightOption(weight.value!, start.value, end.value, dark.value))}
+                option={noSerialize(weightOption(weight.value!, days, dark.value))}
                 onPointClick$={openDay}
               />
             ) : (
@@ -622,7 +668,7 @@ export default component$(() => {
             {hasMood ? (
               <Chart
                 class="h-72 w-full"
-                option={noSerialize(moodOption(mood.value!, start.value, end.value, dark.value))}
+                option={noSerialize(moodOption(mood.value!, days, dark.value))}
                 onPointClick$={openDay}
               />
             ) : (
@@ -638,7 +684,7 @@ export default component$(() => {
 const ChartCard = component$<{ title: string; href: string }>(
   ({ title, href }) => {
     return (
-      <section class="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line">
+      <section class="min-w-0 rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line">
         <h2 class="mb-3 text-lg font-semibold tracking-tight text-foreground">
           {title}
         </h2>

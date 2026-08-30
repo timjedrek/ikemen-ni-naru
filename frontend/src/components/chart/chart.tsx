@@ -72,14 +72,24 @@ export const Chart = component$<ChartProps>(
         });
       }
 
+      // Keep the chart matched to its container. A window `resize` alone misses
+      // container-only size changes (responsive grid collapsing to one column,
+      // sidebars, etc.), which is what left the canvas overflowing on mobile.
+      // A ResizeObserver on the element itself covers both cases.
       const resize = () => chart.resize();
+      const observer = new ResizeObserver(resize);
+      observer.observe(el);
       window.addEventListener("resize", resize);
       cleanup(() => {
+        observer.disconnect();
         window.removeEventListener("resize", resize);
         chart.dispose();
       });
     });
 
-    return <div ref={containerRef} class={className} />;
+    // `min-w-0` lets the chart shrink below its content width inside grid/flex
+    // parents (their children default to min-width:auto), so it never forces a
+    // horizontal scroll on narrow screens.
+    return <div ref={containerRef} class={`min-w-0 ${className ?? ""}`} />;
   },
 );
