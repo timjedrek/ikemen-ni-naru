@@ -23,6 +23,13 @@ import type {
   SleepEntryList,
   SleepEntryUpdate,
 } from "~/types/sleep-entry";
+import type {
+  DayDetail,
+  FoodSeries,
+  MoodSeries,
+  SleepSeries,
+  WeightSeries,
+} from "~/types/analytics";
 
 // Single source of truth for the backend origin, read from the environment
 // (PUBLIC_API_BASE_URL in frontend/.env). Only PUBLIC_-prefixed vars are
@@ -244,4 +251,33 @@ export function updateSleepEntry(
 
 export function deleteSleepEntry(id: number): Promise<void> {
   return apiFetch<void>(`/sleep-entries/${id}`, { method: "DELETE" });
+}
+
+// --- Analytics / dashboard (Phase A) ---
+// All four series share the same inclusive [start, end] date range (YYYY-MM-DD).
+// The backend aggregates and returns chart-ready points; the browser only draws.
+
+function rangeQuery(start: string, end: string): string {
+  return `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+}
+
+export function getFoodAnalytics(start: string, end: string): Promise<FoodSeries> {
+  return apiFetch<FoodSeries>(`/analytics/food${rangeQuery(start, end)}`);
+}
+
+export function getWeightAnalytics(start: string, end: string): Promise<WeightSeries> {
+  return apiFetch<WeightSeries>(`/analytics/weight${rangeQuery(start, end)}`);
+}
+
+export function getMoodAnalytics(start: string, end: string): Promise<MoodSeries> {
+  return apiFetch<MoodSeries>(`/analytics/mood${rangeQuery(start, end)}`);
+}
+
+export function getSleepAnalytics(start: string, end: string): Promise<SleepSeries> {
+  return apiFetch<SleepSeries>(`/analytics/sleep${rangeQuery(start, end)}`);
+}
+
+// A single calendar day's entries across all four trackers (drill-down target).
+export function getDayDetail(date: string): Promise<DayDetail> {
+  return apiFetch<DayDetail>(`/analytics/day/${encodeURIComponent(date)}`);
 }

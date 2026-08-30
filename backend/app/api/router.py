@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    analytics,
     auth,
     food_entries,
     health,
@@ -18,3 +19,4 @@ api_router.include_router(food_entries.router)
 api_router.include_router(weight_entries.router)
 api_router.include_router(mood_entries.router)
 api_router.include_router(sleep_entries.router)
+api_router.include_router(analytics.router)

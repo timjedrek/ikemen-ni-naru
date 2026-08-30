@@ -5,6 +5,7 @@ import { Link, useLocation } from "@builder.io/qwik-city";
 // between them from any app bar. Hidden on small screens to keep mobile chrome
 // uncluttered (same treatment as the "Signed in as" text).
 const LINKS = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/food", label: "Food" },
   { href: "/weight", label: "Weight" },
   { href: "/mood", label: "Mood" },

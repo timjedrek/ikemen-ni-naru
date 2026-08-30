@@ -22,7 +22,7 @@ export default component$(() => {
   useVisibleTask$(async () => {
     const user = await getCurrentUser();
     if (user) {
-      await nav("/food");
+      await nav("/dashboard");
       return;
     }
     checking.value = false;
@@ -39,7 +39,7 @@ export default component$(() => {
       });
       // Registration auto-logs-in (server sets the session cookie), so go
       // straight to the app.
-      await nav("/food");
+      await nav("/dashboard");
     } catch (err) {
       error.value =
         err instanceof ApiError ? err.message : "Registration failed. Try again.";

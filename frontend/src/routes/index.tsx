@@ -45,10 +45,16 @@ export default component$(() => {
 
       <nav class="mt-8 flex flex-wrap gap-3">
         <Link
-          href="/food"
+          href="/dashboard"
           class="inline-flex items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
         >
-          Open food log
+          Open dashboard
+        </Link>
+        <Link
+          href="/food"
+          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+        >
+          Food
         </Link>
         <Link
           href="/weight"

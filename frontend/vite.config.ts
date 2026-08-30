@@ -23,11 +23,30 @@ errorOnDuplicatesPkgDeps(devDependencies, dependencies);
 export default defineConfig(({ command, mode }): UserConfig => {
   return {
     plugins: [tailwindcss(), qwikCity(), qwikVite(), tsconfigPaths({ root: "." })],
+    resolve: {
+      alias: {
+        // ECharts (used by the client-only <Chart> component) ships a nested
+        // tslib whose ESM entry (tslib/modules/index.js) default-imports the
+        // CJS tslib.js and destructures its helpers. esbuild's dev-mode interop
+        // leaves that default `undefined`, so echarts throws on load in dev
+        // ("Cannot destructure property '__extends' of 'import_tslib.default'").
+        // (Rollup handles it in the prod build, which is why `qwik build` was
+        // fine.) Point tslib at its pure-ESM build, which exports the helpers as
+        // named exports directly and sidesteps the broken default-import path.
+        // Safe for prod too — it's valid ESM.
+        tslib: "tslib/tslib.es6.js",
+      },
+    },
     // This tells Vite which dependencies to pre-build in dev mode.
     optimizeDeps: {
       // Put problematic deps that break bundling here, mostly those with binaries.
       // For example ['better-sqlite3'] if you use that in server functions.
       exclude: [],
+      // ECharts loads via a *dynamic* import inside a lazy Qwik segment
+      // (components/chart/chart.tsx), so Vite's dep scanner never sees it and
+      // won't pre-bundle it in dev. List it (and its zrender dep) so esbuild
+      // pre-bundles it once instead of transforming it un-scanned on first use.
+      include: ["echarts", "zrender"],
     },
 
     /**

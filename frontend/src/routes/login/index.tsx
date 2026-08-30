@@ -21,7 +21,7 @@ export default component$(() => {
   useVisibleTask$(async () => {
     const user = await getCurrentUser();
     if (user) {
-      await nav("/food");
+      await nav("/dashboard");
       return;
     }
     checking.value = false;
@@ -32,7 +32,7 @@ export default component$(() => {
     error.value = null;
     try {
       await login({ email: form.email, password: form.password });
-      await nav("/food");
+      await nav("/dashboard");
     } catch (err) {
       error.value =
         err instanceof ApiError ? err.message : "Login failed. Try again.";
