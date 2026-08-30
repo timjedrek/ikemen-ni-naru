@@ -5,6 +5,51 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Phase A: dashboard chart refinements
+
+**Goal:** make the weight/mood/sleep charts actually read correctly against a
+hand-drawn reference (weight-over-time notebook chart). All in
+`routes/dashboard/index.tsx` (+ `components/chart/chart.tsx`).
+
+**Weight & mood — fan-out connections, spaced by date**
+- Old line series threaded points sequentially, so on a day with two readings
+  the previous day connected to only *one* of them. Now each day's points are
+  fully connected to the next day-with-data's points (a bipartite join,
+  `daySegments`): every dot on day N gets a line to every dot on day N+1 →
+  the diamond/zigzag clusters from the reference.
+- Rendered as a `lines` series (`silent`, the segments) + a `scatter` series
+  (the clickable dots on top). `min-w-0` added so nothing forces overflow.
+- **Spaced by date, not clock time.** Points sit on day-*column* indices
+  (category x-axis), so days are evenly spaced and same-day readings stack on
+  one column. The real timestamp rides along on each dot's data as `t` for the
+  tooltip, which now shows date + time (e.g. "Fri 8/29, 7:14 AM" over the value).
+  (Briefly tried a `type: "time"` axis — spaced by instant — but that spread
+  same-day points and read as "by time"; reverted to category-by-date.)
+
+**Sleep — fixed, inverted clock window**
+- Y-axis is now a **fixed 24h window anchored at 8 PM, drawn top-down**
+  (`inverse: true`, `min:-4 max:20 interval:4`): 8 PM at top → midnight →
+  morning → 8 PM next day at bottom. Overnight sleep reads like a timeline
+  (bedtime near top, wake below). A fixed frame keeps nights comparable and
+  stops a stray daytime nap from stretching/squishing the overnight bars.
+  Trade-off: sleeps outside 8 PM–8 PM clip at the edges.
+- Labels switched to 12-hour AM/PM (`clockLabel`) so evening vs. morning is
+  unambiguous. `renderItem` rewritten to be orientation-independent (span from
+  `min` pixel-y by `abs` height) so the inverted axis draws correctly.
+
+**Chart responsiveness.** `chart.tsx` now resizes via a `ResizeObserver` on the
+container (not just `window` resize), so the canvas shrinks when the grid
+collapses to one column — fixes horizontal-scroll overflow on mobile.
+
+**Date range.** Default is now **last 7 days**; added quick presets
+(7 / 14 / 30 / 60 / 90 d) alongside the custom From/To pickers (a custom pick
+clears the preset highlight).
+
+**Verified:** `tsc --noEmit` clean. User confirmed weight/mood fan-out and the
+new sleep labels against a live screenshot.
+
+---
+
 ## 2026-08-29 — Phase A: charts dashboard + day drill-down
 
 **Goal:** the payoff screen — a charts-first dashboard over all four trackers,
