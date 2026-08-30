@@ -5,6 +5,56 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Phase B: account settings + shared header refactor
+
+**Goal:** let a signed-in user edit their own account (name / email / password),
+the last feature before deploy. Goals were originally Phase B but got **deferred
+to `future-features.md`** — nice-to-have, not a blocker. Plan docs updated to
+match (`build-plan-updated-for-deployment.md`, `future-features.md`).
+
+**Backend (reuses the auth slice — no new tables/migration):**
+- `PATCH /api/v1/auth/me` — update `display_name` and/or `email`. Empty payload →
+  422. An email change is gated: requires the **current password** and re-checks
+  uniqueness (friendly 409; DB constraint still the authority). A no-op change to
+  the same address is allowed without a password prompt.
+- `POST /api/v1/auth/password` — verify current password, set the new one (same
+  8-char floor as registration), then **revoke all other sessions** for the user
+  while keeping the caller's current cookie (`delete_user_sessions_except`).
+- New: `schemas.auth.ProfileUpdate` / `PasswordChange`,
+  `crud.user.update_user_profile` / `change_user_password`, and the session
+  bulk-revoke. Wrong current password returns **403** (distinct from the login /
+  not-authenticated 401 — the session is valid, the re-auth just failed).
+
+**Frontend:**
+- New `/settings` page: Profile (name + email; the current-password field only
+  appears once the email is actually changed) and Password (current / new /
+  confirm, with client-side length + match checks). Green success / red error
+  alerts; on save the header's "Signed in as" reflects the new name immediately.
+- `services/api.ts`: `updateProfile`, `changePassword`.
+
+**Shared header refactor (DRY).** The top bar was copy-pasted across all six
+authed pages. Extracted it into one `components/app-header/app-header.tsx` that
+owns the logo, `LogNav`, the account link, theme toggle, and logout. Every page
+now renders `<AppHeader user={authUser.value} width="max-w-{4,5,6}xl" />` instead
+of ~26 lines of duplicated markup, and dropped the now-dead imports + per-page
+`doLogout`. The header now shows the **full `Logo` lockup** (the イケメンになる
+wordmark, linked to /dashboard) in place of the old per-page title text, and the
+**"Signed in as {name}" text is the link into `/settings`** (per request — no
+separate nav item).
+
+**Timezone (investigated, intentionally left alone).** Storage is UTC instants;
+the log pages read/display in the *browser's* local zone. The only consumer of
+`users.timezone` is the dashboard day-bucketing, and that column is hard-defaulted
+to `"UTC"` and never written — so the dashboard buckets at UTC midnight while the
+log pages read local. Latent day-boundary quirk, not yet biting; documented in
+`future-features.md`. Settings deliberately omits timezone to avoid that
+complexity pre-deploy.
+
+**Verified:** `tsc --noEmit` clean; backend imports clean; user confirmed the
+settings flows in the browser. Next: Phase C (production packaging) → deploy.
+
+---
+
 ## 2026-08-29 — Phase A: dashboard chart refinements
 
 **Goal:** make the weight/mood/sleep charts actually read correctly against a

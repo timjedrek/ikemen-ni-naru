@@ -7,9 +7,7 @@ import {
   useVisibleTask$,
 } from "@builder.io/qwik";
 import { Link, useLocation, useNavigate } from "@builder.io/qwik-city";
-import { LogNav } from "~/components/log-nav/log-nav";
-import { LogoMark } from "~/components/logo/logo";
-import { ThemeToggle } from "~/components/theme-toggle/theme-toggle";
+import { AppHeader } from "~/components/app-header/app-header";
 import {
   deleteFoodEntry,
   deleteMoodEntry,
@@ -17,7 +15,6 @@ import {
   deleteWeightEntry,
   getCurrentUser,
   getDayDetail,
-  logout,
   type User,
 } from "~/services/api";
 import type { DayDetail } from "~/types/analytics";
@@ -84,10 +81,6 @@ export default component$(() => {
     reload();
   });
 
-  const doLogout = $(async () => {
-    await logout();
-    await nav("/login");
-  });
 
   // Delete in place, then refresh the day. Edits happen on the tracker pages
   // (linked per entry), which own the forms.
@@ -126,27 +119,7 @@ export default component$(() => {
 
   return (
     <div class="min-h-screen">
-      <header class="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur">
-        <div class="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-3.5">
-          <div class="flex items-center gap-2.5">
-            <LogoMark class="h-8 w-8" />
-            <span class="text-base font-semibold tracking-tight text-foreground">
-              Day
-            </span>
-          </div>
-          <LogNav />
-          <div class="flex items-center gap-3">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick$={doLogout}
-              class="rounded-lg px-3 py-1.5 text-sm font-medium text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppHeader user={authUser.value} width="max-w-4xl" />
 
       <main class="mx-auto max-w-4xl px-6 py-8">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
