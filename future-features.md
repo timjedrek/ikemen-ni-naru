@@ -7,6 +7,19 @@ Pull from this list once the app is live; roughly ordered by value.
 
 ---
 
+## Known bugs & issues
+Things that are shipped but not fully right. Log new ones here as they surface;
+add detail/repro when known.
+
+### Day-report timeline: edit buttons don't work 100%
+The edit affordance on the timeline (top of `/day/[date]`) doesn't reliably open
+the right entry for editing. More detail TBD. Deferred so deployment isn't
+blocked. (Related: the `?edit=<id>` deep link into the tracker pages is a no-op
+if the entry isn't in that page's currently-loaded list, and on the food page a
+manual date change can re-open the form while `?edit` lingers in the URL.)
+
+---
+
 ## Do-soon (first picks after deploy)
 
 ### Postgres backups

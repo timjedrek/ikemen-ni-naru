@@ -169,6 +169,14 @@ export default component$(() => {
     await reload();
   });
 
+  // Smooth-scroll to a category section. `scroll-margin-top` on the target
+  // (scroll-mt-*) keeps its heading clear of the sticky app header + jump bar.
+  const jumpTo = $((id: string) => {
+    document
+      .getElementById(id)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
   if (!authChecked.value) {
     return (
       <main class="flex min-h-screen items-center justify-center">
@@ -266,11 +274,42 @@ export default component$(() => {
           </div>
         )}
 
+        {/* Jump bar: sticks just under the app header while scrolling the
+            grouped view, so a section is always one tap away. */}
+        {d && !isEmpty && view.value === "category" && (
+          <nav
+            aria-label="Jump to section"
+            class="sticky top-16 z-10 mb-8 py-3"
+          >
+            <div class="flex flex-wrap gap-2">
+              {(
+                [
+                  ["food", "Food"],
+                  ["sleep", "Sleep"],
+                  ["mood", "Mood"],
+                  ["weight", "Weight"],
+                ] as [keyof Pick<DayDetail, "food" | "sleep" | "mood" | "weight">, string][]
+              )
+                .filter(([key]) => d[key].length > 0)
+                .map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick$={() => jumpTo(key)}
+                    class="rounded-full bg-surface-muted px-3 py-1.5 text-sm font-medium text-muted ring-1 ring-line transition-colors hover:bg-surface hover:text-foreground"
+                  >
+                    {label}
+                  </button>
+                ))}
+            </div>
+          </nav>
+        )}
+
         {d && !isEmpty && view.value === "category" && (
           <div class="space-y-8">
             {/* Food */}
             {d.food.length > 0 && (
-              <Section title="Food" href="/food">
+              <Section id="food" title="Food" href="/food">
                 <ul class="space-y-3">
                   {d.food.map((e) => (
                     <Row
@@ -290,7 +329,7 @@ export default component$(() => {
 
             {/* Sleep */}
             {d.sleep.length > 0 && (
-              <Section title="Sleep" href="/sleep">
+              <Section id="sleep" title="Sleep" href="/sleep">
                 <ul class="space-y-3">
                   {d.sleep.map((e) => (
                     <Row
@@ -309,7 +348,7 @@ export default component$(() => {
 
             {/* Mood */}
             {d.mood.length > 0 && (
-              <Section title="Mood" href="/mood">
+              <Section id="mood" title="Mood" href="/mood">
                 <ul class="space-y-3">
                   {d.mood.map((e) => (
                     <Row
@@ -327,7 +366,7 @@ export default component$(() => {
 
             {/* Weight */}
             {d.weight.length > 0 && (
-              <Section title="Weight" href="/weight">
+              <Section id="weight" title="Weight" href="/weight">
                 <ul class="space-y-3">
                   {d.weight.map((e) => (
                     <Row
@@ -456,10 +495,11 @@ const TrashIcon = component$(() => (
 
 // A tracker section with a heading that links to the full log page (where
 // entries are edited).
-const Section = component$<{ title: string; href: string }>(
-  ({ title, href }) => {
+const Section = component$<{ id: string; title: string; href: string }>(
+  ({ id, title, href }) => {
     return (
-      <section>
+      // scroll-mt clears the sticky app header + jump bar when jumped to.
+      <section id={id} class="scroll-mt-32">
         <div class="mb-3 flex items-center justify-between">
           <h2 class="text-lg font-semibold tracking-tight text-foreground">
             {title}

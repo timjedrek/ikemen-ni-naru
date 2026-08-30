@@ -5,6 +5,22 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Day report: sticky section-jump buttons (category view)
+
+**`frontend/src/routes/day/[date]/index.tsx`:** in the "By category" view, a
+`<nav>` of pill buttons (Food/Sleep/Mood/Weight, only those present) sits right
+under the timeline and is **sticky** at `top-16` (just below the sticky app
+header) while scrolling. Clicking a button smooth-scrolls to its section via a
+`jumpTo` handler (`getElementById(...).scrollIntoView`); each `Section` got an
+`id` + `scroll-mt-32` so its heading clears the sticky header + jump bar.
+
+**No container around the bar (per user):** dropped the border/`bg-surface/80`/
+`backdrop-blur`/full-bleed — it's just the buttons now. Trade-off: with no
+background, page content shows through the gaps between buttons while scrolling
+(the buttons keep their own `bg-surface-muted` pill fill). Revisit if noisy.
+
+---
+
 ## 2026-08-29 — Day report: timeline chart + feed edit buttons (icons) + deep-link editing
 
 **Timeline (`frontend/src/components/day-timeline/day-timeline.tsx`, new):** a
