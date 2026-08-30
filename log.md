@@ -5,6 +5,23 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Landing page auth-aware CTAs
+
+Tightened the logged-out landing page (`frontend/src/routes/index.tsx`).
+
+**CTAs:** removed the Food/Weight/Mood/Sleep quick links, leaving two buttons —
+**Open dashboard** (brand) and **Log in** (accent). "Create account" is no longer
+a button; it's a text prompt below the nav: "Don't have an account? *Create an
+account*" linking to `/register`.
+
+**Auth-aware:** the page now fetches `getCurrentUser()` in a visible task. When
+there's a session it hides the Log in button and the register prompt and instead
+shows "You are logged in as *{display_name || email}*". Both auth-dependent bits
+are gated on an `authChecked` signal so the logged-out prompt doesn't flash before
+the session check resolves. The Open dashboard button shows either way.
+
+---
+
 ## 2026-08-30 — Mobile responsiveness + "Today" feed on the home page
 
 Post-deploy mobile pass plus a home-page feed.

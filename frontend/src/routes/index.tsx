@@ -6,7 +6,7 @@ import {
 import { Link } from '@builder.io/qwik-city';
 import { Logo, LogoStacked } from '~/components/logo/logo';
 import { ThemeToggle } from '~/components/theme-toggle/theme-toggle';
-import { getHealth } from '~/services/api';
+import { getCurrentUser, getHealth, type User } from '~/services/api';
 import type { HealthResponse } from '~/types/health';
 
 export default component$(() => {
@@ -14,6 +14,19 @@ export default component$(() => {
   const error = useSignal<string | null>(null);
   const loading = useSignal(true);
 
+  // Auth state, so the landing page can swap the login/register prompt for a
+  // "logged in as" line once we know there's a session. authChecked gates the
+  // swap so the login prompt doesn't flash before the check resolves.
+  const user = useSignal<User | null>(null);
+  const authChecked = useSignal(false);
+
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(async () => {
+    user.value = await getCurrentUser();
+    authChecked.value = true;
+  });
+
+  // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(async () => {
     try {
       health.value = await getHealth();
@@ -53,43 +66,35 @@ export default component$(() => {
         >
           Open dashboard
         </Link>
-        <Link
-          href="/food"
-          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-        >
-          Food
-        </Link>
-        <Link
-          href="/weight"
-          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-        >
-          Weight
-        </Link>
-        <Link
-          href="/mood"
-          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-        >
-          Mood
-        </Link>
-        <Link
-          href="/sleep"
-          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-        >
-          Sleep
-        </Link>
-        <Link
-          href="/login"
-          class="inline-flex items-center rounded-lg bg-surface px-5 py-2.5 text-sm font-semibold text-foreground shadow-sm ring-1 ring-line transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-        >
-          Log in
-        </Link>
-        <Link
-          href="/register"
-          class="inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-semibold text-accent-600 transition-colors hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
-        >
-          Create account
-        </Link>
+        {authChecked.value && !user.value && (
+          <Link
+            href="/login"
+            class="inline-flex items-center rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+          >
+            Log in
+          </Link>
+        )}
       </nav>
+
+      {authChecked.value &&
+        (user.value ? (
+          <p class="mt-4 text-sm text-muted">
+            You are logged in as{" "}
+            <span class="font-medium text-foreground">
+              {user.value.display_name || user.value.email}
+            </span>
+          </p>
+        ) : (
+          <p class="mt-4 text-sm text-muted">
+            Don't have an account?{" "}
+            <Link
+              href="/register"
+              class="font-medium text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
+            >
+              Create an account
+            </Link>
+          </p>
+        ))}
 
       <div class="mt-12">
         {loading.value && (
