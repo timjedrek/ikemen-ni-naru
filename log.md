@@ -5,6 +5,50 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Day report: "By category" / "By time" view toggle + feed
+
+**Goal:** the day report (`/day/[date]`) was grouped by tracker (Food / Sleep /
+Mood / Weight), which the user likes. Added a second way to read the same day: a
+single time-ordered feed, newest on top. This is step 1 of a larger day-report
+revamp (later: sticky in-section jump links for the category view, then a
+day-timeline chart on top).
+
+**Changes (`frontend/src/routes/day/[date]/index.tsx`):**
+- Segmented **view toggle** (`role=tablist`) in the report's header row: "By
+  category" (default) vs "By time". Hidden when the day is empty. Backed by a
+  `view` signal; grouped sections and the feed are gated on it.
+- **Feed** (`buildFeed`): flattens all four trackers into one `FeedItem[]`
+  discriminated union tagged with a sort time, sorted newest-first. Reuses the
+  existing `Row` card, now with an optional tinted `kind` pill (amber/violet/
+  accent/brand) so interleaved entries stay scannable; the grouped view omits
+  the pill since the section heading already names the tracker.
+- Feed timestamps: mood→`recorded_at`, weight→`measured_at`, sleep→`started_at`.
+  **Food has no "eaten" time**, so it sorts/labels by `created_at` (when logged)
+  — decided with the user. Feed rows show time-of-day only.
+
+**Added `formatTime` to `frontend/src/utils/datetime.ts`:** UTC ISO → local
+clock time ("7:30 AM"), for feed/timeline contexts where the day is already
+established.
+
+**Not done this pass (deferred by user):** sticky category jump-links, and the
+day-timeline chart.
+
+---
+
+## 2026-08-29 — Food form: serving multiplier + "Where"/"Mood" relabels
+
+**Front-end only (`frontend/src/routes/food/index.tsx`), no backend/schema
+change.** Added a `multiplier` field (default 1) after Calories: macros are
+typed per the label's serving, then scaled by the multiplier so both the
+auto-calculated calories and the values sent to the API reflect the actual
+serving (`scaleMacro`, rounded to 2 dp; empty/invalid multiplier falls back to
+1). Relabeled "Serving" → "Where" and "Notes" → "Mood" (labels only; still
+backed by `serving_description` / `notes`). **Gotcha:** there's no `multiplier`
+column, so stored macros are already scaled — editing an entry resets the
+multiplier to 1 and shows the final macros, not the original label values.
+
+---
+
 ## 2026-08-29 — Fix: dashboard food chart ignored the date-range selector
 
 **Bug:** flipping the 7d/14d/30d (or custom) range redrew the weight/mood/sleep

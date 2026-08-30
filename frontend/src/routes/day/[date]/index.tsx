@@ -18,7 +18,11 @@ import {
   type User,
 } from "~/services/api";
 import type { DayDetail } from "~/types/analytics";
-import { formatDateTime, formatDuration } from "~/utils/datetime";
+import type { FoodEntry } from "~/types/food-entry";
+import type { MoodEntry } from "~/types/mood-entry";
+import type { SleepEntry } from "~/types/sleep-entry";
+import type { WeightEntry } from "~/types/weight-entry";
+import { formatDateTime, formatDuration, formatTime } from "~/utils/datetime";
 
 // "2026-08-29" → "Saturday, Aug 29, 2026". Parsed as local midnight so the
 // weekday/label match the day the user drilled into.
@@ -30,6 +34,68 @@ function formatDayHeading(date: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+// The two ways to read the day: grouped by tracker, or one time-ordered feed.
+type DayView = "category" | "time";
+
+type FeedKind = "food" | "sleep" | "mood" | "weight";
+
+// A tinted pill per tracker, so the "By time" feed (which interleaves all four)
+// stays scannable. Mirrors the meal badge palette used on the food page.
+const KIND_BADGE: Record<FeedKind, string> = {
+  food: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  sleep: "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300",
+  mood: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
+  weight: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
+};
+
+// One entry from any tracker, tagged with the time it happened so the feed can
+// sort across all four. Food has no "eaten" time, so it uses created_at (when
+// it was logged); the others use their real timestamps.
+type FeedItem =
+  | { key: string; kind: "food"; time: number; e: FoodEntry }
+  | { key: string; kind: "sleep"; time: number; e: SleepEntry }
+  | { key: string; kind: "mood"; time: number; e: MoodEntry }
+  | { key: string; kind: "weight"; time: number; e: WeightEntry };
+
+// Flatten the day's four trackers into a single newest-first feed.
+function buildFeed(d: DayDetail): FeedItem[] {
+  const items: FeedItem[] = [
+    ...d.food.map(
+      (e): FeedItem => ({
+        key: `food-${e.id}`,
+        kind: "food",
+        time: new Date(e.created_at).getTime(),
+        e,
+      }),
+    ),
+    ...d.sleep.map(
+      (e): FeedItem => ({
+        key: `sleep-${e.id}`,
+        kind: "sleep",
+        time: new Date(e.started_at).getTime(),
+        e,
+      }),
+    ),
+    ...d.mood.map(
+      (e): FeedItem => ({
+        key: `mood-${e.id}`,
+        kind: "mood",
+        time: new Date(e.recorded_at).getTime(),
+        e,
+      }),
+    ),
+    ...d.weight.map(
+      (e): FeedItem => ({
+        key: `weight-${e.id}`,
+        kind: "weight",
+        time: new Date(e.measured_at).getTime(),
+        e,
+      }),
+    ),
+  ];
+  return items.sort((a, b) => b.time - a.time);
 }
 
 export default component$(() => {
@@ -44,6 +110,7 @@ export default component$(() => {
   const data = useSignal<DayDetail | null>(null);
   const loading = useSignal(false);
   const error = useSignal<string | null>(null);
+  const view = useSignal<DayView>("category");
 
   const reload = $(async () => {
     loading.value = true;
@@ -134,6 +201,38 @@ export default component$(() => {
               {formatDayHeading(loc.params.date)}
             </h1>
           </div>
+
+          {/* View switch: keep the grouped view (default) or read the day as a
+              single time-ordered feed. Hidden when there's nothing to show. */}
+          {d && !isEmpty && (
+            <div
+              role="tablist"
+              aria-label="Day view"
+              class="inline-flex rounded-lg bg-surface-muted p-1 ring-1 ring-line"
+            >
+              {(
+                [
+                  ["category", "By category"],
+                  ["time", "By time"],
+                ] as [DayView, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={view.value === value}
+                  onClick$={() => (view.value = value)}
+                  class={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    view.value === value
+                      ? "bg-surface text-foreground shadow-sm"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {error.value && (
@@ -160,7 +259,7 @@ export default component$(() => {
           </div>
         )}
 
-        {d && !isEmpty && (
+        {d && !isEmpty && view.value === "category" && (
           <div class="space-y-8">
             {/* Food */}
             {d.food.length > 0 && (
@@ -234,6 +333,71 @@ export default component$(() => {
             )}
           </div>
         )}
+
+        {/* By time: every entry from all four trackers, newest first. */}
+        {d && !isEmpty && view.value === "time" && (
+          <ul class="space-y-3">
+            {buildFeed(d).map((item) => {
+              switch (item.kind) {
+                case "food": {
+                  const e = item.e;
+                  return (
+                    <Row
+                      key={item.key}
+                      kind="food"
+                      title={e.food_name}
+                      badge={e.meal_category}
+                      meta={`${formatTime(e.created_at)} · ${e.calories} kcal · P ${e.protein_g}g · C ${e.carb_g}g · F ${e.fat_g}g`}
+                      sub={e.serving_description}
+                      notes={e.notes}
+                      onDelete$={() => removeFood(e.id)}
+                    />
+                  );
+                }
+                case "sleep": {
+                  const e = item.e;
+                  return (
+                    <Row
+                      key={item.key}
+                      kind="sleep"
+                      title={formatDuration(e.duration_minutes)}
+                      badge={`quality ${e.quality_score}/10`}
+                      meta={`${formatTime(e.started_at)} → ${formatTime(e.ended_at)}`}
+                      notes={e.notes}
+                      onDelete$={() => removeSleep(e.id)}
+                    />
+                  );
+                }
+                case "mood": {
+                  const e = item.e;
+                  return (
+                    <Row
+                      key={item.key}
+                      kind="mood"
+                      title={`${e.mood_score}/10`}
+                      meta={formatTime(e.recorded_at)}
+                      notes={e.notes}
+                      onDelete$={() => removeMood(e.id)}
+                    />
+                  );
+                }
+                case "weight": {
+                  const e = item.e;
+                  return (
+                    <Row
+                      key={item.key}
+                      kind="weight"
+                      title={`${e.weight} ${e.unit}`}
+                      meta={formatTime(e.measured_at)}
+                      notes={e.notes}
+                      onDelete$={() => removeWeight(e.id)}
+                    />
+                  );
+                }
+              }
+            })}
+          </ul>
+        )}
       </main>
     </div>
   );
@@ -262,20 +426,30 @@ const Section = component$<{ title: string; href: string }>(
   },
 );
 
-// One entry card, shared across all four trackers.
+// One entry card, shared across all four trackers. In the "By time" feed a
+// `kind` pill is shown so the tracker each entry came from is obvious; the
+// grouped view omits it (the section heading already says which tracker).
 const Row = component$<{
   title: string;
+  kind?: FeedKind;
   badge?: string;
   meta: string;
   sub?: string | null;
   notes?: string | null;
   onDelete$: QRL<() => void>;
-}>(({ title, badge, meta, sub, notes, onDelete$ }) => {
+}>(({ title, kind, badge, meta, sub, notes, onDelete$ }) => {
   return (
     <li class="rounded-xl bg-surface p-4 shadow-sm ring-1 ring-line">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
+            {kind && (
+              <span
+                class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${KIND_BADGE[kind]}`}
+              >
+                {kind}
+              </span>
+            )}
             <h3 class="font-semibold text-foreground">{title}</h3>
             {badge && (
               <span class="inline-flex items-center rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium capitalize text-muted">

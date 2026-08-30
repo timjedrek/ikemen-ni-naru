@@ -34,6 +34,15 @@ export function isoToLocalInput(iso: string): string {
   return dateToLocalInput(new Date(iso));
 }
 
+// UTC ISO → local clock time only, e.g. "7:30 AM". For feeds/timelines where
+// the day is already established and only the time-of-day matters.
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 // UTC ISO → friendly local text, e.g. "Aug 29, 2026, 7:30 AM".
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
