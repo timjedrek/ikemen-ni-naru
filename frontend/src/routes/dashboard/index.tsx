@@ -95,6 +95,21 @@ function clockLabel(hour: number): string {
   return `${h12} ${period}`;
 }
 
+// Whole minutes → "6h 25m" (or "45m" under an hour). For the sleep tooltip.
+function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// A UTC instant → local clock time, e.g. "7:25 AM". For the sleep tooltip.
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 // --- chart palette ----------------------------------------------------------
 // ECharts can't read our CSS tokens, so the brand/accent palette is mirrored as
 // hex here. Axis/grid neutrals flip with the theme.
@@ -367,8 +382,16 @@ function sleepOption(series: SleepSeries, days: string[], dark: boolean): object
   // negative hour) and rises to the wake time. Naps fall out as short daytime
   // bars. Drawn with a custom renderItem — the one place ECharts needs a
   // function; this option is only ever consumed client-side.
+  type SleepPoint = {
+    value: number[];
+    date: string;
+    started: string;
+    ended: string;
+    duration: string;
+    quality: number;
+  };
   const points = series.items
-    .map((s) => {
+    .map((s): SleepPoint | null => {
       const day = localDayOf(s.ended_at);
       const dayIndex = days.indexOf(day);
       if (dayIndex < 0) return null; // ended outside the visible range
@@ -379,9 +402,13 @@ function sleepOption(series: SleepSeries, days: string[], dark: boolean): object
           hoursFromMidnight(s.ended_at, day),
         ],
         date: day,
+        started: clockTime(s.started_at),
+        ended: clockTime(s.ended_at),
+        duration: durationLabel(s.duration_minutes),
+        quality: s.quality_score,
       };
     })
-    .filter((p): p is { value: number[]; date: string } => p !== null);
+    .filter((p): p is SleepPoint => p !== null);
 
   // Fixed 24-hour window anchored at 8 PM, drawn top-to-bottom (`inverse`): 8 PM
   // sits at the top, time flows down through midnight and morning to 8 PM the
@@ -394,7 +421,20 @@ function sleepOption(series: SleepSeries, days: string[], dark: boolean): object
 
   return {
     grid: { ...baseGrid, left: 56 },
-    tooltip: { trigger: "item" },
+    tooltip: {
+      trigger: "item",
+      // Duration is the headline; the clock range and quality give context. The
+      // raw plotted value is hours-from-midnight, which is meaningless to read.
+      formatter: (p: { data?: SleepPoint }) => {
+        const d = p.data;
+        if (!d) return "";
+        return [
+          `<strong>${d.duration}</strong>`,
+          `${d.started} → ${d.ended}`,
+          `quality ${d.quality}/10`,
+        ].join("<br/>");
+      },
+    },
     xAxis: dayCategoryAxis(days, dark),
     yAxis: {
       type: "value",

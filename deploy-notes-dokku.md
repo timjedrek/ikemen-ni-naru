@@ -1,11 +1,14 @@
 # Deploy notes — Dokku on Linode (Phase D)
 
-Runbook for deploying **ikemen ni naru** to a single Linode via Dokku: two apps
-(`frontend` Qwik Node server, `backend` FastAPI) + Postgres, served single-origin
-under one host with the API at `/api`.
+Runbook for deploying **ikemen ni naru** to a dedicated Ubuntu Linode via
+Dokku: two apps (`frontend` Qwik Node server, `backend` FastAPI) + Postgres,
+served single-origin under one host with the API at `/api`.
 
 See [`build-plan-updated-for-deployment.md`](build-plan-updated-for-deployment.md)
-Phase D and the Phase C log entry in [`log.md`](log.md) for how the images were built.
+Phase D and the Phase C log entry in [`log.md`](log.md) for how the images were
+built.
+
+This is **one git repo**. Do not `git init` inside `backend/` or `frontend/`.
 
 ---
 
@@ -13,9 +16,10 @@ Phase D and the Phase C log entry in [`log.md`](log.md) for how the images were 
 
 | Placeholder | Value |
 |---|---|
-| `SERVER_IP` | your Linode's public IPv4 |
+| `SERVER_IP` | Linode public IPv4 |
 | `DOMAIN` | `health.timjedrek.com` |
-| `LE_EMAIL` | `tim@rightruddermarketing.com` (Let's Encrypt) |
+| `LE_EMAIL` | `tim@timjedrek.com` (Let's Encrypt) |
+| `SUDO_USER` | Linux login you create in step 2 (e.g. `tim`) |
 | `backend` / `frontend` | the two Dokku app names (used throughout) |
 | `healthdb` | the Postgres service name |
 
@@ -23,186 +27,445 @@ Phase D and the Phase C log entry in [`log.md`](log.md) for how the images were 
 origin ⇒ zero CORS; session cookie is host-only `SameSite=Lax; Secure`.
 Postgres stays internal (linked over Dokku's docker network, never public).
 
+**Who is who**
+
+| Identity | Job |
+|---|---|
+| `root` | First Linode login only. `apt`, create `SUDO_USER`, then lock it out. |
+| `SUDO_USER` | Daily SSH. Run `sudo dokku …`, plugins, nginx snippets, firewall. |
+| `dokku` | Git receive only (`git push dokku@SERVER_IP:backend`). Not a shell. |
+| `app` / `node` in containers | Already non-root in the Dockerfiles. |
+
+`git push` does **not** use `SUDO_USER`. It uses the `dokku` user plus a key
+you register with `dokku ssh-keys:add`.
+
+Commands tagged **laptop** run on Omarchy. Commands tagged **server** run on
+the Linode.
+
+### Same muscle memory as your Rails Dokku notes
+
+Your old Rails runbook (apt → `adduser` → SSH key → `usermod -aG sudo` →
+Dokku → postgres:create/link → git remote → push → domain → Let's Encrypt)
+is still the spine. This file is that, updated. Differences:
+
+| Your Rails notes (2022) | This app |
+|---|---|
+| `apt update` / `upgrade -y` / `autoremove` / reboot-required | Same (step 2) |
+| `adduser` → `su -` → `~/.ssh/authorized_keys` → root `usermod -aG sudo` | Same (step 2) |
+| `cat ~/.ssh/id_rsa.pub` | New laptop may be `id_ed25519.pub` (step 2) |
+| Dokku bootstrap `v0.26.8` | Current pin in step 5 (`v0.38.27`) |
+| One app, Herokuish/buildpack, `Procfile` | Two Dockerfile apps + `build-dir` (step 7) |
+| `postgres:link` `DATABASE_URL` as-is | Must rewrite to `postgresql+psycopg://` (step 8) |
+| `dokku run … rails db:migrate` | `app.json` predeploy `alembic upgrade head` |
+| Redis plugin | Not used |
+| `domains:set` www **and** apex + redirect plugin | One name: `health.timjedrek.com` |
+| `config:set --global DOKKU_LETSENCRYPT_EMAIL=…` | `letsencrypt:set --global email …` (step 6) |
+| S3 CORS, Tailwind, Action Text, Alpine | N/A |
+
+Keep the extra bits your Rails notes skipped: swap (Node build on 2 GB), UFW,
+disable root SSH after the sudo user works, `/api` nginx glue.
+
 ---
 
-## 1. One prerequisite before deploy — proxy-aware uvicorn (backend Dockerfile)
+## 1. One prerequisite before deploy — proxy-aware uvicorn
 
 The backend runs behind nginx (TLS terminates there). Make uvicorn trust the
-proxy headers so it sees the real scheme/client IP. In `backend/Dockerfile`, the
-`CMD` should be:
+proxy headers so it sees the real scheme/client IP. In `backend/Dockerfile`,
+the `CMD` should be:
 
 ```dockerfile
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --proxy-headers --forwarded-allow-ips=*"]
 ```
 
-(Only `--proxy-headers --forwarded-allow-ips=*` added.) Commit before you push.
-Cookie `Secure` is already driven by `ENVIRONMENT=production`, so this is about
-correctness of forwarded scheme/IP, not the cookie.
+(Only `--proxy-headers --forwarded-allow-ips=*` added.) Commit before you
+push. Cookie `Secure` is already driven by `ENVIRONMENT=production`, so this
+is about forwarded scheme/IP, not the cookie.
 
 ---
 
-## 2. Server prep (as a sudo user on the Linode)
+## 2. First login: updates, new user, SSH, then sudo
+
+This is the same first-boot you use for Rails boxes. Linode hands you
+**root**. Do not stay there.
+
+### 2a. Laptop — copy your public key
+
+Your old notes used RSA (`id_rsa.pub`). Omarchy may already have Ed25519.
+Either works; paste **one** line into `authorized_keys`.
 
 ```bash
-# System up to date
-sudo apt update && sudo apt -y upgrade
-
-# Install Dokku (pin to a current release tag; check dokku.com for latest)
-wget -NP . https://dokku.com/install/v0.35.20/bootstrap.sh
-sudo DOKKU_TAG=v0.35.20 bash bootstrap.sh
+# laptop
+cd ~/.ssh
+ls
+# prefer Ed25519; fall back to RSA from the old laptop
+cat id_ed25519.pub 2>/dev/null || cat id_rsa.pub
 ```
 
-Point DNS **now** so Let's Encrypt can validate later:
+If neither file exists: `ssh-keygen -t ed25519 -C "omarchy-ikemen"` then `cat`
+the `.pub` again.
 
-- `A  DOMAIN  ->  SERVER_IP`
-
-Register your SSH key with Dokku (this is the key that will `git push`):
+### 2b. Server as root — packages, maybe reboot
 
 ```bash
-# Run on the SERVER; paste your PUBLIC key, or cat it in:
-cat ~/.ssh/authorized_keys | dokku ssh-keys:add admin
+# laptop
+ssh root@SERVER_IP
 ```
 
-Set the global vhost domain (optional but tidy):
+```bash
+# server (root) — same sequence as your Rails notes
+sudo apt update
+sudo apt upgrade -y
+sudo apt autoremove -y
+
+cat /var/run/reboot-required
+# if it prints "reboot required" → sudo reboot, then ssh root@SERVER_IP again
+# if "No such file" → no reboot
+```
+
+### 2c. Server as root — create the user
 
 ```bash
-dokku domains:set-global timjedrek.com
+# server (root)
+adduser SUDO_USER
+# password + the gecos prompts (name/room/phone — Enter through them)
+```
+
+### 2d. Drop into that user and add the SSH key
+
+Same as your notes: `su -`, then `authorized_keys`, not as root's `~/.ssh`.
+
+```bash
+# server (root)
+su - SUDO_USER
+mkdir ~/.ssh
+touch ~/.ssh/authorized_keys
+nano ~/.ssh/authorized_keys
+# paste the one pubkey line from the laptop, save
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+exit
+```
+
+### 2e. Back to root — grant sudo
+
+```bash
+# server (root)
+usermod -aG sudo SUDO_USER
+id SUDO_USER
+# expect: uid=…(SUDO_USER) gid=…(SUDO_USER) groups=…,sudo
+```
+
+### 2f. Laptop — prove the user works *before* locking root
+
+Open a **new** terminal (leave the root session up):
+
+```bash
+# laptop
+ssh SUDO_USER@SERVER_IP
+sudo -v    # asks for SUDO_USER's password, then works
+```
+
+Only after that works, disable password SSH and root login (your Rails notes
+didn't do this; do it here):
+
+```bash
+# server (as SUDO_USER)
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo systemctl reload ssh    # Ubuntu 24.04: ssh.service (not sshd)
+```
+
+Confirm a **third** terminal can still `ssh SUDO_USER@SERVER_IP` before you
+close the root session. From here on, every server command is as `SUDO_USER`
+with `sudo` where needed.
+
+Optional SSH config on the laptop:
+
+```bash
+# laptop
+cat >> ~/.ssh/config <<EOF
+Host ikemen
+  HostName SERVER_IP
+  User SUDO_USER
+  IdentityFile ~/.ssh/id_ed25519
+EOF
+# then: ssh ikemen
+# If you still use RSA, IdentityFile ~/.ssh/id_rsa
 ```
 
 ---
 
-## 3. Install plugins (as root/sudo on the server)
+## 3. Swap, firewall, timezone
+
+2 GB is enough to *run* this app. A Node `qwik build` on the box can still
+OOM without swap.
 
 ```bash
+# server
+sudo timedatectl set-timezone America/Los_Angeles   # or your zone
+
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h
+
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+sudo ufw status
+```
+
+---
+
+## 4. Point DNS now
+
+Let's Encrypt needs the name resolving **before** you request a cert.
+
+| Type | Name | Value |
+|---|---|---|
+| A | `health` | `SERVER_IP` |
+
+That is `DOMAIN` → the Linode.
+
+```bash
+# laptop — keep retrying until it prints SERVER_IP
+dig +short DOMAIN A
+```
+
+If DNS is on Cloudflare, use **DNS only** (grey cloud), not proxied. Orange
+cloud breaks Dokku's HTTP-01 challenge.
+
+---
+
+## 5. Install Dokku
+
+Pin to a current release. Check https://dokku.com/docs/getting-started/installation/
+if this tag is stale.
+
+```bash
+# server
+wget -NP . https://dokku.com/install/v0.38.27/bootstrap.sh
+sudo DOKKU_TAG=v0.38.27 bash bootstrap.sh
+```
+
+Takes 5–10 minutes. Installs Docker and nginx.
+
+Register the **same** laptop pubkey so `git push dokku@…` works. Dokku does
+not reuse `SUDO_USER`'s authorized_keys for git:
+
+```bash
+# server (as SUDO_USER) — only your one pubkey line
+sudo dokku ssh-keys:add omarchy "$(cat ~/.ssh/authorized_keys)"
+sudo dokku ssh-keys:list
+```
+
+Global vhost (unused for this app; we set a real domain per app later). IP is
+fine:
+
+```bash
+# server
+sudo dokku domains:set-global SERVER_IP
+```
+
+Sanity check from the laptop — this must print Dokku's command list, **not**
+a Linux shell:
+
+```bash
+# laptop
+ssh dokku@SERVER_IP help
+```
+
+If that fails, git push will fail. Fix `ssh-keys:add` before continuing.
+
+---
+
+## 6. Plugins: Postgres + Let's Encrypt
+
+```bash
+# server
 sudo dokku plugin:install https://github.com/dokku/dokku-postgres.git postgres
 sudo dokku plugin:install https://github.com/dokku/dokku-letsencrypt.git
+sudo dokku letsencrypt:set --global email LE_EMAIL
+sudo dokku letsencrypt:cron-job --add
 ```
 
 ---
 
-## 4. Create the two apps + point each at its subdirectory (monorepo)
+## 7. Create the two apps + point each at its subdirectory (monorepo)
 
-The repo is a monorepo; each app builds from its own subdir. `build-dir` sets the
-build **context** to that subdir so each Dockerfile's relative `COPY`s resolve
-exactly like they do locally.
+Each app builds from its own subdir. `build-dir` sets the build **context**
+so each Dockerfile's relative `COPY`s resolve exactly like they do locally.
 
 ```bash
-dokku apps:create backend
-dokku apps:create frontend
+# server
+sudo dokku apps:create backend
+sudo dokku apps:create frontend
 
 # Must be set BEFORE the first push:
-dokku builder:set backend  build-dir backend
-dokku builder:set frontend build-dir frontend
+sudo dokku builder:set backend  build-dir backend
+sudo dokku builder:set frontend build-dir frontend
 ```
 
-Dokku auto-detects `Dockerfile` in each build-dir and uses the Dockerfile builder.
+Dokku auto-detects `Dockerfile` in each build-dir and uses the Dockerfile
+builder.
 
 ---
 
-## 5. Postgres — create, link, fix the URL scheme
+## 8. Postgres — create, link, fix the URL scheme
 
 ```bash
-dokku postgres:create healthdb
-dokku postgres:link healthdb backend      # injects DATABASE_URL=postgres://...
+# server
+sudo dokku postgres:create healthdb
+sudo dokku postgres:link healthdb backend      # injects DATABASE_URL=postgres://...
 ```
 
-**Scheme fix (required):** dokku-postgres injects `postgres://…`, but SQLAlchemy
-2.0 + psycopg3 needs `postgresql+psycopg://…`. Rewrite it in place:
+**Scheme fix (required):** dokku-postgres injects `postgres://…`, but
+SQLAlchemy 2.0 + psycopg3 needs `postgresql+psycopg://…`. Rewrite it:
 
 ```bash
-URL=$(dokku config:get backend DATABASE_URL)
-dokku config:set --no-restart backend DATABASE_URL="postgresql+psycopg://${URL#postgres://}"
+# server
+URL="$(sudo dokku config:get backend DATABASE_URL)"
+echo "old: $URL"
+sudo dokku config:set --no-restart backend \
+  DATABASE_URL="postgresql+psycopg://${URL#postgres://}"
+sudo dokku config:get backend DATABASE_URL
 ```
 
-Caveat: if you ever `dokku postgres:promote`, it resets `DATABASE_URL` back to
-`postgres://` — re-run the rewrite. The DB host in the URL
-(`dokku-postgres-healthdb`) is internal-only and reachable because `link`
-attaches the app to the service's network.
+Caveat: `dokku postgres:promote` resets `DATABASE_URL` back to `postgres://`
+— re-run the rewrite. The DB host (`dokku-postgres-healthdb`) is
+internal-only; `link` attaches the app to the service's network.
 
 ---
 
-## 6. Backend env vars
+## 9. Backend env vars
 
 ```bash
-dokku config:set backend \
+# server
+SECRET="$(openssl rand -hex 32)"
+echo "SECRET_KEY=$SECRET"    # save this off the box too
+
+sudo dokku config:set backend \
   ENVIRONMENT=production \
   DEBUG=false \
-  SECRET_KEY="$(openssl rand -hex 32)" \
+  LOG_LEVEL=INFO \
+  SECRET_KEY="$SECRET" \
   FRONTEND_URL="https://DOMAIN" \
   CORS_ORIGINS="https://DOMAIN" \
-  WEB_CONCURRENCY=2
+  WEB_CONCURRENCY=1
 ```
 
-(`DATABASE_URL` is already set from step 5. `cookie_secure` flips on
-automatically because `ENVIRONMENT != development`. CORS isn't strictly needed
-same-origin, but setting the exact origin is harmless and future-proof.)
+`WEB_CONCURRENCY=1` is one uvicorn worker — right for a 2 GB box and a
+private tracker. (`DATABASE_URL` is already set from step 8.
+`cookie_secure` flips on because `ENVIRONMENT != development`. CORS isn't
+strictly needed same-origin, but an exact origin is harmless.)
 
-Frontend needs **no runtime config** — `PUBLIC_API_BASE_URL` is baked to the
-relative `/api/v1` at build time via the Dockerfile ARG default.
+Frontend needs **no runtime config** — `PUBLIC_API_BASE_URL` is baked to
+`/api/v1` at image build via the Dockerfile ARG default. Do not
+`dokku config:set frontend PUBLIC_API_BASE_URL=…`; Vite will not see it.
 
 ---
 
-## 7. Add git remotes and deploy (from your LOCAL machine, repo root)
+## 10. Laptop remotes and first deploys
 
-Two apps ⇒ two remotes, same branch pushed to each. `build-dir` makes each build
-the right subdir; the backend's `app.json` runs `alembic upgrade head` as a
-predeploy step (migrations never run on app startup).
+Two apps ⇒ two remotes on **this** repo. Push the same `main` to each.
+`build-dir` picks the subfolder. Backend `app.json` runs
+`alembic upgrade head` as a predeploy step (migrations never run on startup).
 
 ```bash
+# laptop — repo root, not inside backend/ or frontend/
 git remote add dokku-backend  dokku@SERVER_IP:backend
 git remote add dokku-frontend dokku@SERVER_IP:frontend
+git remote -v
+```
 
-git push dokku-backend  main
+Backend first (needs the database):
+
+```bash
+# laptop
+git push dokku-backend main
+```
+
+First push pulls Python 3.14 images; several minutes. Watch for predeploy
+`alembic upgrade head`. Manual fallback:
+
+```bash
+# server
+sudo dokku run backend alembic upgrade head
+sudo dokku run backend alembic current
+# expect: dd1361b0bad5 (head)  (or whatever current head is)
+```
+
+```bash
+# server
+sudo dokku ports:report backend
+sudo dokku logs backend --num 50
+sudo dokku nginx:show-config backend | head -40
+```
+
+Note the upstream name (`backend-8000` or `backend-5000`). Needed in step 11.
+
+Then frontend (Node `npm ci` + `qwik build` is the RAM spike — that's why
+swap exists):
+
+```bash
+# laptop
 git push dokku-frontend main
 ```
 
-Watch the backend deploy logs — you should see the predeploy `alembic upgrade
-head` create the schema. Manual fallback if needed:
-
 ```bash
-dokku run backend alembic upgrade head
+# server
+sudo dokku logs frontend --num 30
+# expect: Node server listening on http://localhost:PORT
 ```
 
-Verify the backend is up on its own (before wiring the domain):
-
-```bash
-dokku ports:report backend        # confirm the http mapping (80 -> 8000)
-dokku logs backend --tail
-```
+`http://DOMAIN/` may already serve Qwik. `/api/v1/…` will not work yet —
+that's still hitting Node. Next step glues them.
 
 ---
 
-## 8. Domains + the single-origin `/api` nginx route
+## 11. Domains + the single-origin `/api` nginx route
 
-Give the domain to the **frontend** only. The backend needs no public domain —
-it's reached via its nginx upstream.
+Give the public name to the **frontend** only. If both apps have it, nginx
+fights itself.
 
 ```bash
-dokku domains:set frontend DOMAIN
-dokku domains:clear backend        # backend has no public vhost
+# server
+sudo dokku domains:set frontend DOMAIN
+sudo dokku domains:clear backend
+sudo dokku domains:report frontend
+sudo dokku domains:report backend
 ```
 
-Now add a custom `location /api/` to the frontend's nginx that proxies to the
-backend's upstream. **First discover the upstream name** Dokku generated for the
-backend (it looks like `backend-8000`):
+Custom `location /api/` on the frontend proxies to the backend upstream.
+This file lives on the **server**, not in git. Dokku includes
+`nginx.conf.d/*.conf` inside the app's `server { }`.
+
+Discover the upstream (from step 10, or):
 
 ```bash
+# server
 sudo nginx -T | grep -A2 "upstream .*backend"
 ```
 
-If nothing prints (no upstream because backend has no domain), give the backend a
-dummy, DNS-less domain so its config — and thus its upstream — is generated, then
-re-check:
+If nothing prints (no upstream because backend has no domain), give it a
+dummy, DNS-less name so nginx still generates the upstream:
 
 ```bash
-dokku domains:set backend backend.internal
-dokku proxy:build-config backend
+# server
+sudo dokku domains:set backend backend.internal
+sudo dokku proxy:build-config backend
 sudo nginx -T | grep -A2 "upstream .*backend"
 ```
 
-Create the route file (replace `UPSTREAM` with the name you found):
+Create the route (replace `UPSTREAM` with that name, e.g. `backend-5000`).
+**No trailing slash** on `proxy_pass`, or nginx strips `/api` and FastAPI
+404s:
 
 ```bash
+# server
 sudo mkdir -p /home/dokku/frontend/nginx.conf.d
 sudo tee /home/dokku/frontend/nginx.conf.d/api.conf >/dev/null <<'EOF'
 location /api/ {
@@ -212,70 +475,110 @@ location /api/ {
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass_request_headers on;
 }
 EOF
 sudo chown dokku:dokku /home/dokku/frontend/nginx.conf.d/api.conf
-sudo nginx -t && sudo systemctl reload nginx
+sudo dokku proxy:build-config frontend
+sudo dokku nginx:validate-config frontend
 ```
 
-Notes:
-- `proxy_pass http://UPSTREAM;` with **no path** preserves the original URI, so
-  `/api/v1/health` reaches the backend unchanged (backend serves under
-  `/api/v1`). Do **not** add a trailing `/` or you'll strip the prefix.
-- This file lives inside the frontend's `server {}` block, so once TLS is on
-  (step 9) `/api` is HTTPS too — the backend needs no cert of its own.
-- It survives redeploys of the frontend (Dokku re-includes `nginx.conf.d/*`).
+```bash
+# laptop
+curl -sS -D- http://DOMAIN/api/v1/health
+# expect: HTTP 200  and  {"status":"ok"}
+curl -sS -o /dev/null -w "%{http_code}\n" http://DOMAIN/
+# expect: 200
+```
 
 ---
 
-## 9. HTTPS (Let's Encrypt) + force redirect
+## 12. HTTPS (Let's Encrypt) + force redirect
+
+The app must already answer on port 80 for `DOMAIN` (steps 4, 10, 11).
+Login will not work on plain HTTP: `ENVIRONMENT=production` marks the
+session cookie `Secure`.
 
 ```bash
-dokku letsencrypt:set frontend email LE_EMAIL
-dokku letsencrypt:enable frontend        # issues cert, adds http->https redirect
-dokku letsencrypt:cron-job --add         # auto-renew
+# server
+sudo dokku letsencrypt:enable frontend
+sudo dokku letsencrypt:list
+ls /home/dokku/frontend/nginx.conf.d/api.conf
+```
+
+```bash
+# laptop
+curl -sS https://DOMAIN/api/v1/health
 ```
 
 The single cert on the frontend covers `/` and `/api` (same server block).
+The backend needs no cert.
 
 ---
 
-## 10. Verify (project done-when)
+## 13. Verify (project done-when)
 
 ```bash
-# API through the public origin:
+# laptop
 curl -sS https://DOMAIN/api/v1/health          # -> {"status":"ok"}
-
-# Frontend SSR:
 curl -sSI https://DOMAIN/                       # -> 200, text/html
 ```
 
-Then in a browser at `https://DOMAIN`: register → log in → add a food/weight/
-mood/sleep entry → open the dashboard charts → drill into a day. Confirm the
-session persists across navigations (cookie set on `DOMAIN`, `Secure`, `Lax`).
+Browser at `https://DOMAIN`:
+
+1. Register.
+2. Land on `/dashboard`.
+3. Log food / weight / mood / sleep.
+4. Reload — still signed in.
+5. Charts; click a point → that day.
+6. Settings: change display name.
+7. Log out, log in.
+
+If register “works” then dumps you on `/login`, the cookie never made it:
+`/api` isn't proxied, or you're on `http`, or the request isn't same-origin.
+`POST /api/v1/auth/register` should be the page host, status 201,
+`Set-Cookie: session=…; HttpOnly; Secure; SameSite=Lax`.
 
 ---
 
 ## Redeploy / operate cheatsheet
 
 ```bash
-# Ship new code:
-git push dokku-backend main            # runs migrations via predeploy
-git push dokku-frontend main
+# laptop
+git push origin main              # GitHub, optional
+git push dokku-backend main       # API + alembic predeploy
+git push dokku-frontend main      # only if frontend changed
 
-# One-off backend commands:
-dokku run backend alembic upgrade head
-dokku run backend alembic current
-
-# Logs / config / restart:
-dokku logs backend --tail
-dokku config:show backend
-dokku ps:restart frontend
-
-# Postgres:
-dokku postgres:info healthdb
-dokku postgres:connect healthdb        # psql shell
+# server
+sudo dokku run backend alembic upgrade head
+sudo dokku run backend alembic current
+sudo dokku logs backend -t
+sudo dokku logs frontend -t
+sudo dokku config:show backend
+sudo dokku ps:restart backend
+sudo dokku postgres:info healthdb
+sudo dokku postgres:connect healthdb
 ```
+
+The nginx snippet survives frontend rebuilds unless you delete
+`/home/dokku/frontend/nginx.conf.d/api.conf`.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| `git push` asks for a password / permission denied | Key not in `dokku ssh-keys:list`. `ssh SUDO_USER@…` works but `ssh dokku@… help` fails. |
+| Push builds the wrong folder / no Dockerfile | `sudo dokku builder:report APP` — `build-dir` not set. |
+| Backend boot: `Can't load plugin: sqlalchemy.dialects:postgres` | `DATABASE_URL` still `postgres://`. Redo the rewrite. |
+| Backend boot: missing `SECRET_KEY` / `database_url` | `sudo dokku config:show backend`. |
+| `alembic` predeploy fails | DB not linked, or URL rewrite broke host/user. `sudo dokku postgres:info healthdb`. |
+| Frontend boots, `/api/v1/health` is a Qwik 404 | nginx snippet missing or `proxy_pass` has a trailing slash. |
+| Login loop | Cookie not set/sent. Need HTTPS + `/api` proxy + `ENVIRONMENT=production`. |
+| Let's Encrypt hangs / fails | DNS not here, Cloudflare orange cloud, port 80 closed, or app not deployed yet. |
+| OOM during `git push` | `free -h` — swap off? Node build is fat. |
+| Locked out after disabling root | `SUDO_USER` key never tested. Use Linode LISH to fix `authorized_keys`. |
 
 ---
 
@@ -283,12 +586,23 @@ dokku postgres:connect healthdb        # psql shell
 
 Put the backend on its own subdomain instead of a path:
 
-- `dokku domains:set backend api.DOMAIN`, add DNS `A api.DOMAIN -> SERVER_IP`,
-  `dokku letsencrypt:enable backend`.
-- Rebuild the frontend with `--build-arg PUBLIC_API_BASE_URL=https://api.DOMAIN/api/v1`
-  (`dokku docker-options:add frontend build "--build-arg PUBLIC_API_BASE_URL=https://api.DOMAIN/api/v1"` then redeploy).
-- Set backend `CORS_ORIGINS=https://DOMAIN` (now genuinely needed — different
-  origin). `api.DOMAIN` and `DOMAIN` are the same site, so the `SameSite=Lax`
-  cookie still works.
+- `sudo dokku domains:set backend api.DOMAIN`, DNS `A api → SERVER_IP`,
+  `sudo dokku letsencrypt:enable backend`.
+- Rebuild the frontend with
+  `--build-arg PUBLIC_API_BASE_URL=https://api.DOMAIN/api/v1`
+  (`sudo dokku docker-options:add frontend build "--build-arg PUBLIC_API_BASE_URL=https://api.DOMAIN/api/v1"`
+  then redeploy).
+- Set backend `CORS_ORIGINS=https://DOMAIN` (now genuinely needed).
+  `api.DOMAIN` and `DOMAIN` are the same site, so `SameSite=Lax` still works.
 
-Skips all custom nginx at the cost of a second cert + real CORS.
+Skips custom nginx at the cost of a second cert + real CORS.
+
+---
+
+## What we are not doing
+
+- Not putting this on the Rails Dokku box.
+- Not `git init` in `backend/` or `frontend/`.
+- Not an `api.` subdomain unless the path proxy fails (see fallback).
+- Not setting `PUBLIC_API_BASE_URL` as a Dokku *runtime* env var.
+- Not running the Linux box as root after step 2.

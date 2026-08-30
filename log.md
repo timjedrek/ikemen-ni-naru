@@ -5,6 +5,21 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Fix: dashboard sleep chart tooltip showed raw wake-hour
+
+**Bug:** hovering a sleep bar showed a bare number like `7.4166` — the wake time
+as **hours-from-midnight** (7:25 AM), not sleep duration. The sleep series had
+`tooltip: { trigger: "item" }` with no formatter, so ECharts dumped a raw value
+from the plotted `[dayIndex, startHour, endHour]` array.
+
+**Fix (`frontend/src/routes/dashboard/index.tsx`):** each sleep point now also
+carries `started`/`ended` (local clock via new `clockTime`), `duration` (new
+`durationLabel`, from `duration_minutes`), and `quality`. Added a tooltip
+`formatter` showing duration as the headline, then the start→end clock range and
+`quality n/10`. Plotted values/`renderItem` unchanged — only the hover text.
+
+---
+
 ## 2026-08-30 — Fix: multiplier now scales manual calories
 
 **Bug:** after the manual-calorie override shipped (entry below), the multiplier

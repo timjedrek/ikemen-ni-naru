@@ -51,4 +51,6 @@ EXPOSE 8000
 
 # Worker count is env-driven (WEB_CONCURRENCY); shell form so ${...} expands.
 # exec so uvicorn is PID 1 and receives signals for clean shutdown.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2}"]
+# --proxy-headers / --forwarded-allow-ips: nginx (Dokku) terminates TLS in
+# front of us; trust X-Forwarded-Proto/For so the app sees https + real client IP.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --proxy-headers --forwarded-allow-ips=*"]
