@@ -5,6 +5,73 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Phase C: production packaging (Docker images, both apps)
+
+**Goal:** get both apps production-shaped and building/running from prod configs
+locally, before touching the Linode/Dokku server (Phase D).
+
+**Topology decided (C3):** single-origin — the app lives on its own subdomain
+`health.timjedrek.com`, frontend at `/`, backend at `/api/*`. Same origin →
+**zero CORS**, session cookie is plain `SameSite=Lax; Secure` on one host. Kept
+the `/api/v1` prefix (room for a future `/api/v2`; also makes the eventual Dokku
+nginx rule trivial — everything the backend serves already lives under `/api/`,
+so `location /api/ → backend` needs no rewrite). No app-code changes needed for
+topology; the config was already fully env-driven. Confirmed **all** frontend
+API calls run in `useVisibleTask$` (client only — no `routeLoader$`/`server$`
+anywhere), so a **relative `/api/v1`** base URL works in prod with no
+server-side internal URL.
+
+**Backend (C1) — `backend/Dockerfile` + `.dockerignore` + `app.json`:**
+- Two-stage image: builder installs from the **locked** `uv.lock`
+  (`uv sync --frozen --no-dev`, `ghcr.io/astral-sh/uv:python3.14-...` base) into
+  a self-contained venv; runtime is `python:3.14-slim` carrying just the venv +
+  code, running as a **non-root** `app` user. ASGI server is env-driven:
+  `uvicorn app.main:app --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2}`,
+  exec'd so uvicorn is PID 1 (clean shutdown signals).
+- Migrations are an **explicit** deploy step, never on startup: `app.json`
+  `scripts.dokku.predeploy: "alembic upgrade head"` (fallback:
+  `dokku run backend alembic upgrade head`).
+- **Health path decision:** kept existing `/api/v1/health` — no new endpoint.
+  Dokku's `CHECKS` hits the container directly on its own port (bypasses the
+  public `/api` nginx routing), so it just needs a path the app serves.
+- Verified: image builds (355 MB); boots against local Postgres with 2 workers;
+  `/api/v1/health` → 200; `alembic upgrade head` runs inside the image and
+  `alembic current` → `dd1361b0bad5 (head)`.
+
+**Frontend (C2) — Qwik Node server adapter + `frontend/Dockerfile`:**
+- `npm run qwik add node-server` → `adapters/node-server/vite.config.ts`,
+  `src/entry.node-server.tsx` (reads `process.env.PORT`, default 3004),
+  `build.server` + `serve` scripts.
+- `PUBLIC_API_BASE_URL` is **baked at build time** (Vite inlines `PUBLIC_*`), so
+  prod passes it as a Docker **build ARG** (default `/api/v1`), not a runtime
+  var. Dev keeps `.env` (`http://localhost:8000/api/v1`); documented both in
+  `.env.example`.
+- `frontend/Dockerfile`: `node:22-slim` build stage (`npm ci` + `npm run build`
+  with the ARG) → slim runtime carrying only `dist/` + `server/` + one external
+  runtime dep. **Gotcha:** the qwik node bundle imports **`undici`** at runtime
+  (a `devDependencies` entry, zero-dep itself) — first runtime crashed with
+  `ERR_MODULE_NOT_FOUND: undici`; fixed by copying just
+  `node_modules/undici` into the runtime image. Runs as the base image's `node`
+  user.
+- Verified: full `qwik build` clean (only pre-existing warnings); `build.types`
+  (tsc) clean; image builds (330 MB), boots, serves SSR HTML on `/` (200, real
+  markup + wordmark), static `/build/*` assets 200, and every route
+  (`/login /dashboard /settings /food /weight /mood /sleep`) resolves 200 (via
+  Qwik's canonical trailing-slash 301 → 200).
+
+**Gotcha (environment, not code):** backgrounded shell processes get SIGTERM'd
+in this sandbox, so a bare `node server/…` couldn't be kept alive to test —
+detached Docker containers survive, so both apps were verified as containers
+(which is also the Phase D artifact). Also noted: startup log shows `debug=True`
+under `ENVIRONMENT=production` because `config.py` defaults `debug=True` — set
+`DEBUG=false` in the prod env vars in Phase D (no code change).
+
+**Done when (met):** both apps build and run from their production configs
+locally, driven entirely by environment/build variables. Next: Phase D
+(Linode + Dokku) — needs server IP, domain, and Dokku access.
+
+---
+
 ## 2026-08-29 — AppHeader: one fixed width (follow-up to Phase B)
 
 Follow-up to the header refactor below. The settings page's nav looked squished:

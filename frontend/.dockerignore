@@ -1,0 +1,17 @@
+# Keep the build context small and the image free of local-only artifacts.
+node_modules/
+dist/
+server/
+tmp/
+.vite/
+
+# Local env — PUBLIC_API_BASE_URL is passed as a build ARG, never baked from .env.
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
