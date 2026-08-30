@@ -5,6 +5,22 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — AppHeader: one fixed width (follow-up to Phase B)
+
+Follow-up to the header refactor below. The settings page's nav looked squished:
+the first cut gave `AppHeader` a per-page `width` prop matching each page's body
+width, and settings' body is the narrowest (`max-w-3xl`), which didn't leave room
+for the nav (5 links + date picker + account link + toggle + logout).
+
+Fix: the header now uses **one fixed content width (`max-w-6xl`) on every page**,
+independent of the body below it, and the `width` prop is gone. This lines the
+bar up identically site-wide and kills the whole "narrow page = cramped nav"
+class of bug. Body widths stay per-page (dashboard 6xl, logs 5xl, day 4xl,
+settings 3xl); only the top bar is unified. All six call sites now render
+`<AppHeader user={authUser.value} />`. `tsc --noEmit` clean.
+
+---
+
 ## 2026-08-29 — Phase B: account settings + shared header refactor
 
 **Goal:** let a signed-in user edit their own account (name / email / password),
