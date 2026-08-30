@@ -5,6 +5,68 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-29 — Phase A: charts dashboard + day drill-down
+
+**Goal:** the payoff screen — a charts-first dashboard over all four trackers,
+with click-to-drill into a single day. See
+`build-plan-updated-for-deployment.md` (Phase A).
+
+**Built (backend)** — a dedicated read model, not raw rows to the browser:
+- `schemas/analytics.py`, `crud/analytics.py`, `api/routes/analytics.py` (new
+  `/api/v1/analytics/*` router), all owner-scoped and date-ranged
+  (`?start=&end=`, inclusive; 422 if `start > end`).
+  - **food** — per-day calorie + macro totals, aggregated in SQL (grouped on
+    `entry_date`; only days with entries → gaps preserved, no zero-fill).
+  - **weight / mood** — every entry (timestamp + value), *not* daily-averaged.
+  - **sleep** — each sleep as a `{start, end, duration}` interval.
+  - **`/analytics/day/{date}`** — every entry for one day across all four
+    trackers (drill-down target); empty lists (not 404) for an empty day.
+- **Timezone:** weight/mood/sleep are UTC instants, so "which day" is resolved
+  in the user's `timezone` (zoneinfo, falls back to UTC on bad data). Date
+  ranges become a half-open UTC window `[start 00:00, (end+1) 00:00)`. A sleep
+  is attributed to the day it *ended* (the morning you woke). Food uses its
+  plain `entry_date` column — no tz math.
+
+**Built (frontend)**
+- `components/chart/chart.tsx` — client-only ECharts wrapper. ECharts is
+  `import()`-ed inside a `useVisibleTask$` (never SSR'd, lazy-loaded only where a
+  chart is used) and the option object is `noSerialize`'d (it may hold functions
+  like a custom `renderItem`, and being client-only it must never cross Qwik's
+  serialization boundary). Swappable from this one file.
+- `routes/dashboard/index.tsx` — post-login landing (login/register now redirect
+  here). Date-range picker (default last 30 days). Four cards, order
+  **Weight, Food, Sleep, Mood**; each has a "+ Add … entry" button linking to
+  its log page. Click any point → `/day/YYYY-MM-DD`.
+  - **Food** — stacked area of macro *calorie contributions* (Atwater 4/4/9) so
+    the stack height reads as calories.
+  - **Weight / Mood** — x = day columns, y = value, line-with-dots; multiple
+    same-day entries = multiple dots on one x.
+  - **Sleep** — vertical bars per day (custom `renderItem`), y = clock time;
+    overnight sleeps start just below midnight (negative hour → e.g. 23:00).
+- `routes/day/[date]/index.tsx` — lists all entries for a day; in-place delete +
+  "open … log" links; reloads reactively when the URL date changes.
+- `components/log-nav` — added a **Dashboard** link and a global **"jump to
+  date"** picker (→ `/day/<date>` from any page). `types/analytics.ts` +
+  `services/api.ts` analytics calls.
+
+**Gotcha — ECharts + Vite dev (`tslib`).** Charts rendered blank in dev with
+`Cannot destructure property '__extends' of 'import_tslib.default'`. ECharts'
+nested tslib ESM entry default-imports the CJS `tslib.js`; esbuild's dev interop
+leaves that default `undefined`. (Rollup handles it, so `qwik build` was fine —
+dev only.) Fixed in `vite.config.ts`: alias `tslib` → `tslib/tslib.es6.js` (pure
+ESM named exports) + `optimizeDeps.include: ["echarts","zrender"]`; added a
+top-level `tslib` dep so the alias resolves. New dep: `echarts`.
+
+**Verified**
+- Backend over real HTTP: all four series return correct data; day attribution
+  (a sleep ending next morning excluded from the prior day); `422` on inverted
+  range; `401` unauthenticated.
+- Frontend `build.types` + `qwik build` clean (only the pre-existing home-page
+  `useVisibleTask$` warning). Drove a headless browser (mocked API): all four
+  charts paint, clicking a point opens `/day/…` with that day's entries.
+
+---
+
 ## 2026-08-29 — Phase 7: weight, mood & sleep tracking
 
 **Goal:** complete the health-tracking features by repeating the food-entry

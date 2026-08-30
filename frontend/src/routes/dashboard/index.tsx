@@ -6,7 +6,7 @@ import {
   useSignal,
   useVisibleTask$,
 } from "@builder.io/qwik";
-import { useNavigate } from "@builder.io/qwik-city";
+import { Link, useNavigate } from "@builder.io/qwik-city";
 import { Chart, type ChartClickParams } from "~/components/chart/chart";
 import { LogNav } from "~/components/log-nav/log-nav";
 import { LogoMark } from "~/components/logo/logo";
@@ -50,6 +50,44 @@ function defaultEnd(): string {
 // timestamped point (weight/mood/sleep).
 function localDayOf(iso: string): string {
   return localDateIso(new Date(iso));
+}
+
+// Every day in the inclusive [start, end] range as "YYYY-MM-DD". These are the
+// shared x-axis categories for the weight/mood/sleep charts, so each day is a
+// column and missing days simply show as empty columns.
+function daysInRange(start: string, end: string): string[] {
+  const out: string[] = [];
+  const d = new Date(`${start}T00:00:00`);
+  const last = new Date(`${end}T00:00:00`);
+  // Guard against an inverted range producing an unbounded loop.
+  while (d <= last && out.length < 400) {
+    out.push(localDateIso(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+// A day category value ("YYYY-MM-DD") → short axis label, e.g. "Sat 8/29".
+function dayLabel(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "numeric",
+    day: "numeric",
+  });
+}
+
+// Hours (may be fractional/negative) of an instant relative to midnight of the
+// given local day. Used to place a sleep vertically on its day's column: a sleep
+// that began the previous evening reads as a negative start (e.g. 23:00 → -1).
+function hoursFromMidnight(iso: string, dayIso: string): number {
+  const midnight = new Date(`${dayIso}T00:00:00`).getTime();
+  return (new Date(iso).getTime() - midnight) / 3_600_000;
+}
+
+// Clock-time y-axis label: 7 → "07:00", -1 → "23:00".
+function clockLabel(hour: number): string {
+  const h = ((Math.round(hour) % 24) + 24) % 24;
+  return `${String(h).padStart(2, "0")}:00`;
 }
 
 // --- chart palette ----------------------------------------------------------
@@ -142,16 +180,25 @@ function foodOption(series: FoodSeries, dark: boolean): object {
   };
 }
 
-function weightOption(series: WeightSeries, dark: boolean): object {
+// Shared x-axis: one column per day in the range, weekday-labelled.
+function dayCategoryAxis(days: string[], dark: boolean): object {
+  const n = neutrals(dark);
+  return {
+    type: "category",
+    data: days,
+    boundaryGap: true,
+    axisLabel: { color: n.axis, hideOverlap: true, formatter: dayLabel },
+    axisLine: { lineStyle: { color: n.split } },
+    axisTick: { show: false },
+  };
+}
+
+function weightOption(series: WeightSeries, days: string[], dark: boolean): object {
   const n = neutrals(dark);
   return {
     grid: baseGrid,
-    tooltip: { trigger: "axis" },
-    xAxis: {
-      type: "time",
-      axisLabel: { color: n.axis },
-      axisLine: { lineStyle: { color: n.split } },
-    },
+    tooltip: { trigger: "item" },
+    xAxis: dayCategoryAxis(days, dark),
     yAxis: {
       type: "value",
       scale: true,
@@ -164,29 +211,28 @@ function weightOption(series: WeightSeries, dark: boolean): object {
       {
         type: "line",
         showSymbol: true,
-        symbolSize: 8,
+        symbolSize: 9,
+        lineStyle: { width: 2 },
         color: COLOR.weight,
-        // One point per weigh-in — multiple same-day weigh-ins keep their own
-        // timestamps and plot as separate dots.
-        data: series.items.map((p) => ({
-          value: [p.measured_at, Number(p.weight)],
-          date: localDayOf(p.measured_at),
-        })),
+        // A point per weigh-in on its day's column, connected day-to-day. Two
+        // weigh-ins on the same day are two dots on the same x at different
+        // heights (the line runs near-vertical between them, since points are
+        // ordered oldest-first).
+        data: series.items.map((p) => {
+          const day = localDayOf(p.measured_at);
+          return { value: [day, Number(p.weight)], date: day };
+        }),
       },
     ],
   };
 }
 
-function moodOption(series: MoodSeries, dark: boolean): object {
+function moodOption(series: MoodSeries, days: string[], dark: boolean): object {
   const n = neutrals(dark);
   return {
     grid: baseGrid,
-    tooltip: { trigger: "axis" },
-    xAxis: {
-      type: "time",
-      axisLabel: { color: n.axis },
-      axisLine: { lineStyle: { color: n.split } },
-    },
+    tooltip: { trigger: "item" },
+    xAxis: dayCategoryAxis(days, dark),
     yAxis: {
       type: "value",
       min: 1,
@@ -200,37 +246,64 @@ function moodOption(series: MoodSeries, dark: boolean): object {
       {
         type: "line",
         showSymbol: true,
-        symbolSize: 8,
+        symbolSize: 9,
+        lineStyle: { width: 2 },
         color: COLOR.mood,
-        data: series.items.map((p) => ({
-          value: [p.recorded_at, p.mood_score],
-          date: localDayOf(p.recorded_at),
-        })),
+        // Every reading on its day's column, connected day-to-day; multiple
+        // readings a day = multiple dots on the same x.
+        data: series.items.map((p) => {
+          const day = localDayOf(p.recorded_at);
+          return { value: [day, p.mood_score], date: day };
+        }),
       },
     ],
   };
 }
 
-function sleepOption(series: SleepSeries, dark: boolean): object {
+function sleepOption(series: SleepSeries, days: string[], dark: boolean): object {
   const n = neutrals(dark);
-  // A Gantt-style timeline: each sleep is a bar spanning start→end on a real
-  // time axis, so the chart shows *when* sleep happened (naps included), not
-  // just how long. Drawn with a custom renderItem (the one place ECharts needs
-  // a function; this option is only ever consumed client-side).
+  // Each sleep is a vertical bar on its day's column, spanning its clock-time
+  // range (y = time of day). A sleep is attributed to the day it *ended* (the
+  // morning you woke), so an overnight sleep starts just below midnight (a
+  // negative hour) and rises to the wake time. Naps fall out as short daytime
+  // bars. Drawn with a custom renderItem — the one place ECharts needs a
+  // function; this option is only ever consumed client-side.
+  const points = series.items
+    .map((s) => {
+      const day = localDayOf(s.ended_at);
+      const dayIndex = days.indexOf(day);
+      if (dayIndex < 0) return null; // ended outside the visible range
+      return {
+        value: [
+          dayIndex,
+          hoursFromMidnight(s.started_at, day),
+          hoursFromMidnight(s.ended_at, day),
+        ],
+        date: day,
+      };
+    })
+    .filter((p): p is { value: number[]; date: string } => p !== null);
+
+  // Fit the y-axis to the data with a little padding, but keep a sensible
+  // default window (evening → late morning) when there's little/no data.
+  const starts = points.map((p) => p.value[1]);
+  const ends = points.map((p) => p.value[2]);
+  const yMin = Math.floor(Math.min(-2, ...starts) - 1);
+  const yMax = Math.ceil(Math.max(10, ...ends) + 1);
+
   return {
-    grid: { ...baseGrid, left: 64 },
+    grid: { ...baseGrid, left: 56 },
     tooltip: { trigger: "item" },
-    xAxis: {
-      type: "time",
-      axisLabel: { color: n.axis },
-      axisLine: { lineStyle: { color: n.split } },
-      splitLine: { show: true, lineStyle: { color: n.split } },
-    },
+    xAxis: dayCategoryAxis(days, dark),
     yAxis: {
-      type: "category",
-      data: ["Sleep"],
-      axisLabel: { color: n.axis },
-      axisLine: { lineStyle: { color: n.split } },
+      type: "value",
+      min: yMin,
+      max: yMax,
+      interval: 3,
+      name: "time",
+      nameTextStyle: { color: n.axis },
+      axisLabel: { color: n.axis, formatter: clockLabel },
+      splitLine: { lineStyle: { color: n.split } },
     },
     series: [
       {
@@ -245,27 +318,25 @@ function sleepOption(series: SleepSeries, dark: boolean): object {
             style: () => unknown;
           },
         ) => {
-          const lane = api.value(0);
-          const start = api.coord([api.value(1), lane]);
-          const end = api.coord([api.value(2), lane]);
-          const height = api.size([0, 1])[1] * 0.5;
+          const dayIndex = api.value(0);
+          const top = api.coord([dayIndex, api.value(2)]); // wake time (higher y)
+          const bottom = api.coord([dayIndex, api.value(1)]); // sleep start
+          const bandWidth = api.size([1, 0])[0];
+          const width = Math.max(6, bandWidth * 0.5);
           return {
             type: "rect",
             shape: {
-              x: start[0],
-              y: start[1] - height / 2,
-              width: end[0] - start[0],
-              height,
+              x: top[0] - width / 2,
+              y: top[1],
+              width,
+              height: bottom[1] - top[1],
+              r: 3,
             },
             style: api.style(),
           };
         },
-        encode: { x: [1, 2], y: 0 },
-        data: series.items.map((s) => ({
-          value: [0, Date.parse(s.started_at), Date.parse(s.ended_at)],
-          // A sleep belongs to the day it *ended* (the morning you woke).
-          date: localDayOf(s.ended_at),
-        })),
+        encode: { x: 0, y: [1, 2] },
+        data: points,
       },
     ],
   };
@@ -359,6 +430,9 @@ export default component$(() => {
   const hasMood = (mood.value?.items.length ?? 0) > 0;
   const hasSleep = (sleep.value?.items.length ?? 0) > 0;
 
+  // Shared day columns for the weight/mood/sleep charts.
+  const days = daysInRange(start.value, end.value);
+
   return (
     <div class="min-h-screen">
       <header class="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur">
@@ -434,7 +508,19 @@ export default component$(() => {
         {loading.value && <p class="mb-4 text-sm text-muted">Loading…</p>}
 
         <div class="grid gap-6 lg:grid-cols-2">
-          <ChartCard title="Food" subtitle="Calories by macro, per day">
+          <ChartCard title="Weight" href="/weight">
+            {hasWeight ? (
+              <Chart
+                class="h-72 w-full"
+                option={noSerialize(weightOption(weight.value!, days, dark.value))}
+                onPointClick$={openDay}
+              />
+            ) : (
+              <ChartEmpty />
+            )}
+          </ChartCard>
+
+          <ChartCard title="Food" href="/food">
             {hasFood ? (
               <Chart
                 class="h-72 w-full"
@@ -446,11 +532,11 @@ export default component$(() => {
             )}
           </ChartCard>
 
-          <ChartCard title="Sleep" subtitle="When you slept (and for how long)">
+          <ChartCard title="Sleep" href="/sleep">
             {hasSleep ? (
               <Chart
                 class="h-72 w-full"
-                option={noSerialize(sleepOption(sleep.value!, dark.value))}
+                option={noSerialize(sleepOption(sleep.value!, days, dark.value))}
                 onPointClick$={openDay}
               />
             ) : (
@@ -458,23 +544,11 @@ export default component$(() => {
             )}
           </ChartCard>
 
-          <ChartCard title="Mood" subtitle="Every reading, over time">
+          <ChartCard title="Mood" href="/mood">
             {hasMood ? (
               <Chart
                 class="h-72 w-full"
-                option={noSerialize(moodOption(mood.value!, dark.value))}
-                onPointClick$={openDay}
-              />
-            ) : (
-              <ChartEmpty />
-            )}
-          </ChartCard>
-
-          <ChartCard title="Weight" subtitle="Every weigh-in, over time">
-            {hasWeight ? (
-              <Chart
-                class="h-72 w-full"
-                option={noSerialize(weightOption(weight.value!, dark.value))}
+                option={noSerialize(moodOption(mood.value!, days, dark.value))}
                 onPointClick$={openDay}
               />
             ) : (
@@ -487,17 +561,22 @@ export default component$(() => {
   );
 });
 
-const ChartCard = component$<{ title: string; subtitle: string }>(
-  ({ title, subtitle }) => {
+const ChartCard = component$<{ title: string; href: string }>(
+  ({ title, href }) => {
     return (
       <section class="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line">
-        <div class="mb-3">
-          <h2 class="text-lg font-semibold tracking-tight text-foreground">
-            {title}
-          </h2>
-          <p class="text-sm text-muted">{subtitle}</p>
-        </div>
+        <h2 class="mb-3 text-lg font-semibold tracking-tight text-foreground">
+          {title}
+        </h2>
         <Slot />
+        <div class="mt-4 flex justify-end">
+          <Link
+            href={href}
+            class="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+          >
+            + Add {title.toLowerCase()} entry
+          </Link>
+        </div>
       </section>
     );
   },

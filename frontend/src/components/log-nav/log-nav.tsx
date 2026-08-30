@@ -1,9 +1,10 @@
 import { component$ } from "@builder.io/qwik";
-import { Link, useLocation } from "@builder.io/qwik-city";
+import { Link, useLocation, useNavigate } from "@builder.io/qwik-city";
 
-// The four logging features. Each is its own page; this nav lets the user move
-// between them from any app bar. Hidden on small screens to keep mobile chrome
-// uncluttered (same treatment as the "Signed in as" text).
+// The four logging features plus the charts dashboard. Each is its own page;
+// this nav lets the user move between them from any app bar. Hidden on small
+// screens to keep mobile chrome uncluttered (same treatment as the "Signed in
+// as" text).
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/food", label: "Food" },
@@ -13,6 +14,7 @@ const LINKS = [
 ];
 
 export const LogNav = component$(() => {
+  const nav = useNavigate();
   const path = useLocation().url.pathname;
   return (
     <nav class="hidden items-center gap-1 sm:flex">
@@ -32,6 +34,19 @@ export const LogNav = component$(() => {
           </Link>
         );
       })}
+      {/* Jump straight to any day's breakdown, from any page. */}
+      <label class="ml-1 flex items-center gap-1.5 text-sm text-muted">
+        <span class="sr-only">Jump to date</span>
+        <input
+          type="date"
+          aria-label="Jump to date"
+          title="Jump to a day"
+          onChange$={(_, el) => {
+            if (el.value) nav(`/day/${el.value}`);
+          }}
+          class="rounded-lg border-0 bg-surface px-2 py-1 text-foreground shadow-sm ring-1 ring-inset ring-line-strong focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
+        />
+      </label>
     </nav>
   );
 });

@@ -37,7 +37,9 @@ function formatDayHeading(date: string): string {
 
 export default component$(() => {
   const nav = useNavigate();
-  const date = useLocation().params.date;
+  // Reactive: the date lives in the URL, and the nav date-picker can change it
+  // while staying on this same route, so we track it rather than reading once.
+  const loc = useLocation();
 
   const authUser = useSignal<User | null>(null);
   const authChecked = useSignal(false);
@@ -50,7 +52,7 @@ export default component$(() => {
     loading.value = true;
     error.value = null;
     try {
-      data.value = await getDayDetail(date);
+      data.value = await getDayDetail(loc.params.date);
     } catch (err) {
       error.value = err instanceof Error ? err.message : "Failed to load day";
     } finally {
@@ -58,6 +60,7 @@ export default component$(() => {
     }
   });
 
+  // Auth gate (once): redirect out if there's no session.
   // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(async () => {
     const user = await getCurrentUser();
@@ -67,7 +70,18 @@ export default component$(() => {
     }
     authUser.value = user;
     authChecked.value = true;
-    await reload();
+  });
+
+  // Load (and reload) whenever the date in the URL changes — but only once
+  // authenticated. Navigating /day/A → /day/B reuses this component, so this is
+  // what refreshes the data on that in-route navigation.
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(({ track }) => {
+    track(() => loc.params.date);
+    // Also re-run once auth resolves (it flips after this task's first run).
+    track(() => authChecked.value);
+    if (!authChecked.value) return;
+    reload();
   });
 
   const doLogout = $(async () => {
@@ -144,7 +158,7 @@ export default component$(() => {
               ← Back to dashboard
             </Link>
             <h1 class="mt-1 text-2xl font-bold tracking-tight text-foreground">
-              {formatDayHeading(date)}
+              {formatDayHeading(loc.params.date)}
             </h1>
           </div>
         </div>
