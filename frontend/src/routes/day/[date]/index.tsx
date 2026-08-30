@@ -119,7 +119,7 @@ export default component$(() => {
 
   return (
     <div class="min-h-screen">
-      <AppHeader user={authUser.value} width="max-w-4xl" />
+      <AppHeader user={authUser.value} />
 
       <main class="mx-auto max-w-4xl px-6 py-8">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">

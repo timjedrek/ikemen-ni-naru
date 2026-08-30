@@ -10,14 +10,11 @@ import { logout, type User } from "~/services/api";
  * used to be copy-pasted across all of them: the logo lockup, the cross-page
  * nav, the "signed in as" link into account settings, theme toggle, and logout.
  *
- * `width` matches the page's own content max-width so the bar lines up with the
- * body below it (pages use 4xl/5xl/6xl). `user` is passed in because each page
- * already resolves it during its auth check.
+ * The bar uses one fixed content width on every page (independent of each page's
+ * own body width) so the nav always has room and lines up identically site-wide.
+ * `user` is passed in because each page already resolves it during its auth check.
  */
-export const AppHeader = component$<{
-  user: User | null;
-  width?: string;
-}>(({ user, width = "max-w-5xl" }) => {
+export const AppHeader = component$<{ user: User | null }>(({ user }) => {
   const nav = useNavigate();
 
   const doLogout = $(async () => {
@@ -27,7 +24,7 @@ export const AppHeader = component$<{
 
   return (
     <header class="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur">
-      <div class={`mx-auto flex ${width} items-center justify-between gap-4 px-6 py-3.5`}>
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3.5">
         {/* Logo doubles as the home link (the dashboard is the landing page). */}
         <Link href="/dashboard" class="flex items-center" aria-label="Ikemen ni Naru — dashboard">
           <Logo class="h-8 w-auto" />

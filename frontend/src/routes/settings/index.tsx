@@ -159,7 +159,7 @@ export default component$(() => {
 
   return (
     <div class="min-h-screen">
-      <AppHeader user={authUser.value} width="max-w-3xl" />
+      <AppHeader user={authUser.value} />
 
       <main class="mx-auto max-w-3xl px-6 py-8">
         <div class="mb-6">
