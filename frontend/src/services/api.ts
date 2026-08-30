@@ -215,6 +215,10 @@ export function updateFoodEntry(
   });
 }
 
+export function getFoodEntry(id: number): Promise<FoodEntry> {
+  return apiFetch<FoodEntry>(`/food-entries/${id}`);
+}
+
 export function deleteFoodEntry(id: number): Promise<void> {
   return apiFetch<void>(`/food-entries/${id}`, { method: "DELETE" });
 }
@@ -237,6 +241,10 @@ export function updateWeightEntry(
     method: "PATCH",
     json: data,
   });
+}
+
+export function getWeightEntry(id: number): Promise<WeightEntry> {
+  return apiFetch<WeightEntry>(`/weight-entries/${id}`);
 }
 
 export function deleteWeightEntry(id: number): Promise<void> {
@@ -263,6 +271,10 @@ export function updateMoodEntry(
   });
 }
 
+export function getMoodEntry(id: number): Promise<MoodEntry> {
+  return apiFetch<MoodEntry>(`/mood-entries/${id}`);
+}
+
 export function deleteMoodEntry(id: number): Promise<void> {
   return apiFetch<void>(`/mood-entries/${id}`, { method: "DELETE" });
 }
@@ -285,6 +297,10 @@ export function updateSleepEntry(
     method: "PATCH",
     json: data,
   });
+}
+
+export function getSleepEntry(id: number): Promise<SleepEntry> {
+  return apiFetch<SleepEntry>(`/sleep-entries/${id}`);
 }
 
 export function deleteSleepEntry(id: number): Promise<void> {

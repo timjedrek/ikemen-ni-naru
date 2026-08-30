@@ -1,11 +1,13 @@
 import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
 import { useLocation, useNavigate } from "@builder.io/qwik-city";
 import { AppHeader } from "~/components/app-header/app-header";
+import { PencilIcon, TrashIcon } from "~/components/icons/action-icons";
 import {
   ApiError,
   createFoodEntry,
   deleteFoodEntry,
   getCurrentUser,
+  getFoodEntry,
   listFoodEntries,
   updateFoodEntry,
   type User,
@@ -107,6 +109,7 @@ export default component$(() => {
   const listLoading = useSignal(false);
 
   const form = useStore<FormState>(blankForm());
+  const formRef = useSignal<HTMLElement>();
   const editingId = useSignal<number | null>(null);
   const submitting = useSignal(false);
   const formError = useSignal<string | null>(null);
@@ -156,11 +159,14 @@ export default component$(() => {
     if (!authChecked.value || !date) return;
     await reload();
     // Deep link (?edit=<id>): once this date's entries are loaded, open that
-    // entry's edit form. No-op if the id isn't among this day's entries.
+    // entry's edit form. Prefer this day's list; fall back to fetching by id so
+    // the link works even if the entry isn't among the loaded entries.
     const editId = Number(loc.url.searchParams.get("edit"));
     if (editId) {
-      const entry = data.value?.items.find((e) => e.id === editId);
+      let entry = data.value?.items.find((e) => e.id === editId);
+      if (!entry) entry = await getFoodEntry(editId).catch(() => undefined);
       if (entry) await startEdit(entry);
+      clearEditParam();
     }
   });
 
@@ -171,6 +177,25 @@ export default component$(() => {
     formError.value = null;
     manualCalories.value = false;
     manualBase.value = 0;
+  });
+
+  // Drop ?edit from the URL after opening (or failing to open) the form, so a
+  // later reload or date change can't re-trigger editing from a stale param.
+  const clearEditParam = $(() => {
+    if (typeof window === "undefined") return;
+    const u = new URL(window.location.href);
+    if (!u.searchParams.has("edit")) return;
+    u.searchParams.delete("edit");
+    window.history.replaceState(null, "", u.pathname + u.search);
+  });
+
+  // On the single-column mobile/tablet layout the form is stacked above the
+  // list, so editing a lower entry leaves it off-screen. On desktop (lg+) the
+  // form is sticky and always visible, so only scroll below that breakpoint.
+  const scrollFormIntoView = $(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      formRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   });
 
   const startEdit = $((entry: FoodEntry) => {
@@ -190,6 +215,7 @@ export default component$(() => {
     // resets to 1, so the stored total is also the per-serving base.
     manualCalories.value = true;
     manualBase.value = entry.calories;
+    scrollFormIntoView();
   });
 
   const submit = $(async () => {
@@ -289,6 +315,7 @@ export default component$(() => {
         <div class="grid gap-8 lg:grid-cols-[minmax(0,22rem)_1fr]">
           {/* Form */}
           <section
+            ref={formRef}
             aria-labelledby="form-heading"
             class="h-fit rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-line lg:sticky lg:top-24"
           >
@@ -582,16 +609,20 @@ export default component$(() => {
                         <button
                           type="button"
                           onClick$={() => startEdit(entry)}
-                          class="rounded-md px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
+                          aria-label="Edit entry"
+                          title="Edit"
+                          class="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
                         >
-                          Edit
+                          <PencilIcon />
                         </button>
                         <button
                           type="button"
                           onClick$={() => remove(entry.id)}
-                          class="rounded-md px-2.5 py-1 text-xs font-medium text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-400 dark:ring-red-900/50 dark:hover:bg-red-950/40"
+                          aria-label="Delete entry"
+                          title="Delete"
+                          class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-400 dark:ring-red-900/50 dark:hover:bg-red-950/40"
                         >
-                          Delete
+                          <TrashIcon />
                         </button>
                       </div>
                     </div>
