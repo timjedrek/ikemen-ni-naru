@@ -127,6 +127,14 @@ add to today. Keep templates and historical entries in separate tables.
 
 ---
 
+## Model alcohol as a real macro (`alcohol_g`)
+Alcohol is **7 kcal/g** and isn't captured by the 4/4/9 protein/carb/fat math.
+Shipped a front-end **manual calorie override** so alcohol is loggable now (type
+the calories directly; a shot ≈ 100 kcal / 0 macros; beer/wine = carbs *plus*
+alcohol calories). The fuller version: add an `alcohol_g` column + migration,
+fold it into the auto-calc (`… + alcohol * 7`), expose it as a 4th macro input,
+and track/chart it. Backend + type changes — deferred.
+
 ## Further-out ideas
 Originally scoped out in Phase 0, still worth noting:
 - Date-effective (historical) goals instead of one current goal record.

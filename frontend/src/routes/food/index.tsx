@@ -110,6 +110,13 @@ export default component$(() => {
   const editingId = useSignal<number | null>(null);
   const submitting = useSignal(false);
   const formError = useSignal<string | null>(null);
+  // When true, Calories was typed by hand rather than derived from the 4/4/9
+  // macro math. This is how alcohol (7 kcal/g, not a tracked macro) gets logged
+  // — a shot is ~100 kcal with no protein/carb/fat. `manualBase` holds the
+  // per-serving calories typed; the displayed/submitted value is base ×
+  // multiplier, so 5 shots at 100 kcal reads 500.
+  const manualCalories = useSignal(false);
+  const manualBase = useSignal(0);
 
   const reload = $(async () => {
     if (!selectedDate.value) return;
@@ -162,6 +169,8 @@ export default component$(() => {
     Object.assign(form, blankForm());
     editingId.value = null;
     formError.value = null;
+    manualCalories.value = false;
+    manualBase.value = 0;
   });
 
   const startEdit = $((entry: FoodEntry) => {
@@ -176,6 +185,11 @@ export default component$(() => {
     form.notes = entry.notes ?? "";
     editingId.value = entry.id;
     formError.value = null;
+    // Preserve the stored calories as-is; they may not equal the macro math
+    // (e.g. an alcohol entry), so treat an edit as a manual value. Multiplier
+    // resets to 1, so the stored total is also the per-serving base.
+    manualCalories.value = true;
+    manualBase.value = entry.calories;
   });
 
   const submit = $(async () => {
@@ -357,7 +371,8 @@ export default component$(() => {
                     value={form.protein_g}
                     onInput$={(_, el) => {
                       form.protein_g = el.value;
-                      form.calories = caloriesFromMacros(form);
+                      if (!manualCalories.value)
+                        form.calories = caloriesFromMacros(form);
                     }}
                   />
                 </label>
@@ -372,7 +387,8 @@ export default component$(() => {
                     value={form.carb_g}
                     onInput$={(_, el) => {
                       form.carb_g = el.value;
-                      form.calories = caloriesFromMacros(form);
+                      if (!manualCalories.value)
+                        form.calories = caloriesFromMacros(form);
                     }}
                   />
                 </label>
@@ -387,7 +403,8 @@ export default component$(() => {
                     value={form.fat_g}
                     onInput$={(_, el) => {
                       form.fat_g = el.value;
-                      form.calories = caloriesFromMacros(form);
+                      if (!manualCalories.value)
+                        form.calories = caloriesFromMacros(form);
                     }}
                   />
                 </label>
@@ -395,13 +412,49 @@ export default component$(() => {
 
               <div>
                 <label class={labelClass}>
-                  Calories{" "}
-                  <span class="font-normal text-subtle">(auto)</span>
+                  <span class="flex items-center justify-between">
+                    <span>
+                      Calories{" "}
+                      <span class="font-normal text-subtle">
+                        {manualCalories.value ? "(manual)" : "(auto)"}
+                      </span>
+                    </span>
+                    {manualCalories.value && (
+                      <button
+                        type="button"
+                        onClick$={() => {
+                          manualCalories.value = false;
+                          manualBase.value = 0;
+                          form.calories = caloriesFromMacros(form);
+                        }}
+                        class="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                      >
+                        Use auto
+                      </button>
+                    )}
+                  </span>
                   <input
                     type="number"
-                    readOnly
-                    class={`${inputClass} bg-black/5 dark:bg-white/5`}
+                    min="0"
+                    step="1"
+                    class={inputClass}
                     value={form.calories}
+                    onInput$={(_, el) => {
+                      // Typing sets a manual value; clearing reverts to auto.
+                      if (el.value === "") {
+                        manualCalories.value = false;
+                        manualBase.value = 0;
+                        form.calories = caloriesFromMacros(form);
+                      } else {
+                        manualCalories.value = true;
+                        // The typed number is the total at the current
+                        // multiplier; store the per-serving base so changing the
+                        // multiplier rescales it (100 typed at ×5 → 500).
+                        form.calories = el.value;
+                        manualBase.value =
+                          (Number(el.value) || 0) / multiplierValue(form);
+                      }
+                    }}
                   />
                 </label>
               </div>
@@ -418,7 +471,11 @@ export default component$(() => {
                     value={form.multiplier}
                     onInput$={(_, el) => {
                       form.multiplier = el.value;
-                      form.calories = caloriesFromMacros(form);
+                      form.calories = manualCalories.value
+                        ? String(
+                            Math.round(manualBase.value * multiplierValue(form)),
+                          )
+                        : caloriesFromMacros(form);
                     }}
                   />
                 </label>

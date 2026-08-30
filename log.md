@@ -5,6 +5,40 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Fix: multiplier now scales manual calories
+
+**Bug:** after the manual-calorie override shipped (entry below), the multiplier
+didn't affect a manually-typed calorie value — 5 shots at 100 kcal still read
+100, not 500. Two causes: the multiplier handler skipped the recompute in manual
+mode, and manual calories were never scaled at all.
+
+**Fix (`frontend/src/routes/food/index.tsx`):** added a `manualBase` signal
+holding the per-serving calories typed. Displayed/submitted Calories in manual
+mode = `round(manualBase × multiplier)`. The multiplier handler now recomputes
+in both modes; typing the Calories field back-derives `manualBase` from the
+shown total at the current multiplier (100 typed at ×5 → 500); `startEdit` seeds
+`manualBase` from the stored calories (multiplier resets to 1); `resetForm` and
+**Use auto** clear it.
+
+---
+
+## 2026-08-30 — Food form: manual calorie override (alcohol edge case)
+
+**Problem:** Calories was read-only and auto-derived from 4/4/9 macros, so
+alcohol (**7 kcal/g**, not a tracked macro) couldn't be logged — a straight shot
+(0 protein/carb/fat) computed to 0 kcal. (Beer/wine also undercounted: they're
+carbs *plus* alcohol calories.)
+
+**Fix (front-end only, `frontend/src/routes/food/index.tsx`):** Calories is now
+an editable input. A `manualCalories` signal gates the auto-calc — macro and
+multiplier edits only overwrite Calories while it's in auto mode. Typing a value
+flips it to manual (label shows "(manual)", with a **Use auto** button to revert);
+clearing the field returns to auto. `startEdit` treats stored calories as manual
+(they may not equal the macro math); `resetForm` clears the flag. No backend/
+schema change. Fuller `alcohol_g`-as-4th-macro approach noted in future-features.
+
+---
+
 ## 2026-08-30 — Day report: sticky section-jump buttons (category view)
 
 **`frontend/src/routes/day/[date]/index.tsx`:** in the "By category" view, a
