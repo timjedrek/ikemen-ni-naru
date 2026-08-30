@@ -86,6 +86,16 @@ function hoursFromMidnight(iso: string, dayIso: string): number {
   return (new Date(iso).getTime() - midnight) / 3_600_000;
 }
 
+// Which sleep-chart column an instant belongs to. The columns run 8 PM → 8 PM,
+// so anything logged after 8 PM belongs to the *next* day's column (it sits at
+// the top of that column, before midnight). Shifting +4h moves the 8 PM
+// boundary to midnight, so the calendar day of the shifted instant is the
+// column: 10 PM Aug 29 → 2 AM Aug 30 → the Aug 30 column.
+const WINDOW_ANCHOR_MS = 4 * 3_600_000;
+function windowDayOf(iso: string): string {
+  return localDateIso(new Date(new Date(iso).getTime() + WINDOW_ANCHOR_MS));
+}
+
 // Clock-time y-axis label in 12-hour form so evening vs. morning is obvious as
 // the axis crosses midnight: -3 → "9 PM", 0 → "12 AM", 6 → "6 AM", 9 → "9 AM".
 function clockLabel(hour: number): string {
@@ -392,16 +402,21 @@ function sleepOption(series: SleepSeries, days: string[], dark: boolean): object
   };
   const points = series.items
     .map((s): SleepPoint | null => {
-      const day = localDayOf(s.ended_at);
-      const dayIndex = days.indexOf(day);
+      // Place the bar in the 8 PM→8 PM column the sleep ended in, and measure
+      // its vertical position from that column's midnight so an after-8 PM nap
+      // reads as a negative start at the top of the next day's column rather
+      // than dropping off the bottom of the day it was logged.
+      const column = windowDayOf(s.ended_at);
+      const dayIndex = days.indexOf(column);
       if (dayIndex < 0) return null; // ended outside the visible range
       return {
         value: [
           dayIndex,
-          hoursFromMidnight(s.started_at, day),
-          hoursFromMidnight(s.ended_at, day),
+          hoursFromMidnight(s.started_at, column),
+          hoursFromMidnight(s.ended_at, column),
         ],
-        date: day,
+        // Drill-down still targets the real calendar day it was logged.
+        date: localDayOf(s.ended_at),
         started: clockTime(s.started_at),
         ended: clockTime(s.ended_at),
         duration: durationLabel(s.duration_minutes),

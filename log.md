@@ -5,6 +5,29 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Fix: after-8 PM naps rendered below the sleep chart axis
+
+**Bug:** the sleep chart's columns run 8 PM → 8 PM (`Y_MIN = -4`, `Y_MAX = 20`),
+but each sleep was assigned to a column by its `ended_at` **calendar day**. A nap
+ending after 8 PM (e.g. 10 PM Aug 29) landed at hour ~22 — past `Y_MAX` — so it
+rendered below the axis on the wrong day instead of at the top of the next day's
+column.
+
+**Fix (`frontend/src/routes/dashboard/index.tsx`):** added `windowDayOf()`, which
+shifts the instant by +4h so the 8 PM boundary becomes midnight, then takes the
+local calendar day — yielding the correct 8 PM→8 PM column (10 PM Aug 29 → Aug 30
+column). Sleep points now use `windowDayOf(ended_at)` for column index and
+vertical position, so an after-8 PM nap reads as a negative start at the top of
+the next column. Drill-down (`date`) still uses `localDayOf(ended_at)` — the real
+calendar day it was logged — so click-through targets the right `/day/:date`.
+
+**Known edge case:** an after-8 PM nap on the *most recent* day in range maps to
+tomorrow's not-yet-visible column and won't appear until the next day. Charts
+kept sharing one aligned `days` array (no extra trailing column) to stay in line
+with the weight/mood charts.
+
+---
+
 ## 2026-08-30 — Fix: dashboard sleep chart tooltip showed raw wake-hour
 
 **Bug:** hovering a sleep bar showed a bare number like `7.4166` — the wake time
