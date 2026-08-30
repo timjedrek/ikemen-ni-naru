@@ -1,5 +1,5 @@
 import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
-import { useLocation, useNavigate } from "@builder.io/qwik-city";
+import { useNavigate } from "@builder.io/qwik-city";
 import { AppHeader } from "~/components/app-header/app-header";
 import { PencilIcon, TrashIcon } from "~/components/icons/action-icons";
 import {
@@ -34,7 +34,6 @@ const inputClass =
 
 export default component$(() => {
   const nav = useNavigate();
-  const loc = useLocation();
   // Auth gate: null until checked. We render nothing app-related until the
   // check resolves, so protected data never flashes before a possible redirect.
   const authUser = useSignal<User | null>(null);
@@ -61,31 +60,6 @@ export default component$(() => {
       listLoading.value = false;
     }
   });
-
-  // Route protection (buildplan Step 34): confirm a valid session before showing
-  // anything. Usability guard only; the backend is the real security boundary.
-  // eslint-disable-next-line qwik/no-use-visible-task
-  useVisibleTask$(async () => {
-    const user = await getCurrentUser();
-    if (!user) {
-      await nav("/login");
-      return;
-    }
-    authUser.value = user;
-    authChecked.value = true;
-    await reload();
-    // Deep link from the day report (?edit=<id>): open that entry's edit form.
-    // Prefer the loaded list; fall back to fetching the entry by id so the link
-    // works even when it's older than the recently-loaded page.
-    const editId = Number(loc.url.searchParams.get("edit"));
-    if (editId) {
-      let entry = items.value.find((e) => e.id === editId);
-      if (!entry) entry = await getWeightEntry(editId).catch(() => undefined);
-      if (entry) await startEdit(entry);
-      clearEditParam();
-    }
-  });
-
 
   const resetForm = $(() => {
     Object.assign(form, blankForm());
@@ -119,6 +93,33 @@ export default component$(() => {
     editingId.value = entry.id;
     formError.value = null;
     scrollFormIntoView();
+  });
+
+  // Route protection (buildplan Step 34): confirm a valid session before showing
+  // anything. Usability guard only; the backend is the real security boundary.
+  // NOTE: references startEdit/clearEditParam, which the Qwik optimizer captures
+  // by lexical scope at registration time — so they must be declared *above*
+  // this task, or they resolve to undefined when it runs.
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(async () => {
+    const user = await getCurrentUser();
+    if (!user) {
+      await nav("/login");
+      return;
+    }
+    authUser.value = user;
+    authChecked.value = true;
+    await reload();
+    // Deep link from the day report (?edit=<id>): open that entry's edit form.
+    // Prefer the loaded list; fall back to fetching the entry by id so the link
+    // works even when it's older than the recently-loaded page.
+    const editId = Number(new URLSearchParams(window.location.search).get("edit"));
+    if (editId) {
+      let entry = items.value.find((e) => e.id === editId);
+      if (!entry) entry = await getWeightEntry(editId).catch(() => undefined);
+      if (entry) await startEdit(entry);
+      clearEditParam();
+    }
   });
 
   const submit = $(async () => {

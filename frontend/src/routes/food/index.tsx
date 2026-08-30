@@ -1,5 +1,5 @@
 import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
-import { useLocation, useNavigate } from "@builder.io/qwik-city";
+import { useNavigate } from "@builder.io/qwik-city";
 import { AppHeader } from "~/components/app-header/app-header";
 import { PencilIcon, TrashIcon } from "~/components/icons/action-icons";
 import {
@@ -97,7 +97,6 @@ const inputClass =
 
 export default component$(() => {
   const nav = useNavigate();
-  const loc = useLocation();
   // Auth gate: null until checked. We render nothing app-related until the
   // check resolves, so protected data never flashes before a possible redirect.
   const authUser = useSignal<User | null>(null);
@@ -149,27 +148,11 @@ export default component$(() => {
     authChecked.value = true;
     // Honor a deep link from the day report (?date=<day>) so its edit link lands
     // on the right day; otherwise default to today. Triggers the load task below.
-    selectedDate.value = loc.url.searchParams.get("date") || todayIso();
+    // Read from window.location (not useLocation) — after an SPA nav from the
+    // day report the reactive loc.url can still be stale here, dropping params.
+    const params = new URLSearchParams(window.location.search);
+    selectedDate.value = params.get("date") || todayIso();
   });
-
-  // Reload whenever the selected date changes — but only once authenticated.
-  // eslint-disable-next-line qwik/no-use-visible-task
-  useVisibleTask$(async ({ track }) => {
-    const date = track(() => selectedDate.value);
-    if (!authChecked.value || !date) return;
-    await reload();
-    // Deep link (?edit=<id>): once this date's entries are loaded, open that
-    // entry's edit form. Prefer this day's list; fall back to fetching by id so
-    // the link works even if the entry isn't among the loaded entries.
-    const editId = Number(loc.url.searchParams.get("edit"));
-    if (editId) {
-      let entry = data.value?.items.find((e) => e.id === editId);
-      if (!entry) entry = await getFoodEntry(editId).catch(() => undefined);
-      if (entry) await startEdit(entry);
-      clearEditParam();
-    }
-  });
-
 
   const resetForm = $(() => {
     Object.assign(form, blankForm());
@@ -216,6 +199,27 @@ export default component$(() => {
     manualCalories.value = true;
     manualBase.value = entry.calories;
     scrollFormIntoView();
+  });
+
+  // Reload whenever the selected date changes — but only once authenticated.
+  // NOTE: references startEdit/clearEditParam, which the Qwik optimizer captures
+  // by lexical scope at registration time — so they must be declared *above*
+  // this task, or they resolve to undefined when it runs.
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(async ({ track }) => {
+    const date = track(() => selectedDate.value);
+    if (!authChecked.value || !date) return;
+    await reload();
+    // Deep link (?edit=<id>): once this date's entries are loaded, open that
+    // entry's edit form. Prefer this day's list; fall back to fetching by id so
+    // the link works even if the entry isn't among the loaded entries.
+    const editId = Number(new URLSearchParams(window.location.search).get("edit"));
+    if (editId) {
+      let entry = data.value?.items.find((e) => e.id === editId);
+      if (!entry) entry = await getFoodEntry(editId).catch(() => undefined);
+      if (entry) await startEdit(entry);
+      clearEditParam();
+    }
   });
 
   const submit = $(async () => {
