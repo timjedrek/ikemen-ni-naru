@@ -151,6 +151,7 @@ export function logout(): Promise<void> {
 export function updateProfile(data: {
   display_name?: string | null;
   email?: string;
+  timezone?: string;
   current_password?: string;
 }): Promise<User> {
   return apiFetch<User>("/auth/me", { method: "PATCH", json: data });
@@ -167,9 +168,26 @@ export function changePassword(data: {
 
 // Returns the current user, or null if not authenticated (401). Other errors
 // still throw, so callers can distinguish "logged out" from "server down".
+//
+// Side effect: the user's stored timezone drives how the dashboard buckets
+// UTC-stored instants into local days, but nothing ever set it (it defaults to
+// "UTC" server-side). So whenever the browser's real zone differs from what's
+// stored, silently self-heal it. This only fires when the zone actually changed
+// (normally a one-time event), so we await it — that guarantees the very first
+// dashboard load already queries with the corrected zone rather than being one
+// render behind. A failed sync is swallowed so it can never block the auth gate.
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    return await apiFetch<User>("/auth/me");
+    const user = await apiFetch<User>("/auth/me");
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (browserTz && browserTz !== user.timezone) {
+      try {
+        return await updateProfile({ timezone: browserTz });
+      } catch {
+        user.timezone = browserTz; // reflect locally even if the write failed
+      }
+    }
+    return user;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return null;
     throw err;

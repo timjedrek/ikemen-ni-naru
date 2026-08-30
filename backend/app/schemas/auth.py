@@ -1,8 +1,9 @@
 """Auth request/response schemas (buildplan Phase 6)."""
 
 from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.security import MIN_PASSWORD_LENGTH
 
@@ -29,7 +30,23 @@ class ProfileUpdate(BaseModel):
 
     display_name: str | None = Field(default=None, max_length=100)
     email: EmailStr | None = None
+    # The client sends the browser's IANA zone (e.g. "America/Chicago") so the
+    # dashboard can bucket UTC-stored instants into the right local day. Rejected
+    # if it isn't a real zone — better a clean 422 than silently storing garbage
+    # the read side would just fall back to UTC on.
+    timezone: str | None = Field(default=None, max_length=64)
     current_password: str | None = Field(default=None, max_length=128)
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("Unknown timezone") from exc
+        return v
 
 
 class PasswordChange(BaseModel):

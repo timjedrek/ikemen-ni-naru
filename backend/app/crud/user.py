@@ -34,14 +34,16 @@ def create_user(
 
 
 def update_user_profile(db: Session, user: User, fields: dict) -> User:
-    """Apply profile changes to `user`. Only the two editable columns are touched
-    and only when present in `fields` (so "set to null" is distinct from
-    "unchanged"); email is normalized on the way in, matching create_user. Callers
-    are responsible for any uniqueness/identity checks before calling this."""
+    """Apply profile changes to `user`. Only the editable columns are touched and
+    only when present in `fields` (so "set to null" is distinct from "unchanged");
+    email is normalized on the way in, matching create_user. Callers are
+    responsible for any uniqueness/identity checks before calling this."""
     if "email" in fields:
         user.email = normalize_email(fields["email"])
     if "display_name" in fields:
         user.display_name = fields["display_name"]
+    if "timezone" in fields:
+        user.timezone = fields["timezone"]
     db.commit()
     db.refresh(user)
     return user
