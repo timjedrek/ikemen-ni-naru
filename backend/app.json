@@ -1,0 +1,8 @@
+{
+  "//": "Dokku reads this at deploy. predeploy runs `alembic upgrade head` inside the freshly built image (with the app's injected env, so DATABASE_URL is present) BEFORE the new release goes live. This is the explicit migration step — the app never auto-creates schema on startup. Manual fallback: `dokku run backend alembic upgrade head`.",
+  "scripts": {
+    "dokku": {
+      "predeploy": "alembic upgrade head"
+    }
+  }
+}
