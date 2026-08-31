@@ -5,6 +5,34 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — README notes live deploy; queries moved to their own file
+
+Added a "Live at health.timjedrek.com" line near the top of `README.md` — kept it
+to just that, deliberately not surfacing infra names/topology in the public README.
+
+Moved the registered-users query out of the README into a new root file
+**`postgres-queries.md`** (connect via `sudo dokku postgres:connect ikemen-db`,
+plus queries for all users / total count / last-7-days signups, and the dev-user
+caveat). `deploy-notes-dokku.md` still has the same command inline in its Ops
+section.
+
+---
+
+## 2026-08-30 — Record real Dokku names + how to list registered users
+
+Captured the actual production names (the deploy notes had been using generic
+placeholders): apps are **`ikemen-backend`** and **`ikemen-frontend`**, Postgres
+service is **`ikemen-db`**.
+
+**`deploy-notes-dokku.md`:** noted the real names next to the placeholders in
+section 0, and added an **"Ops: who's registered?"** section — until there's an
+admin UI, check users by querying Postgres directly
+(`sudo dokku postgres:connect ikemen-db` → `SELECT … FROM users`). Also flags the
+temporary dev user seeded by migration `1fe11a2c1211` so it isn't mistaken for a
+real signup. Proper admin view stays on the future-features list.
+
+---
+
 ## 2026-08-30 — Day feed defaults to "By time"
 
 All day feeds now open in the time-ordered view instead of grouped-by-category.

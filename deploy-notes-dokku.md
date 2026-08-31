@@ -20,8 +20,8 @@ This is **one git repo**. Do not `git init` inside `backend/` or `frontend/`.
 | `DOMAIN` | `health.timjedrek.com` |
 | `LE_EMAIL` | `tim@timjedrek.com` (Let's Encrypt) |
 | `SUDO_USER` | Linux login you create in step 2 (e.g. `tim`) |
-| `backend` / `frontend` | the two Dokku app names (used throughout) |
-| `healthdb` | the Postgres service name |
+| `backend` / `frontend` | the two Dokku app names (used throughout). **Actual: `ikemen-backend` / `ikemen-frontend`** |
+| `healthdb` | the Postgres service name. **Actual: `ikemen-db`** |
 
 **Topology (decided):** `DOMAIN/` → frontend, `DOMAIN/api/*` → backend. Same
 origin ⇒ zero CORS; session cookie is host-only `SameSite=Lax; Secure`.
@@ -579,6 +579,35 @@ The nginx snippet survives frontend rebuilds unless you delete
 | Let's Encrypt hangs / fails | DNS not here, Cloudflare orange cloud, port 80 closed, or app not deployed yet. |
 | OOM during `git push` | `free -h` — swap off? Node build is fat. |
 | Locked out after disabling root | `SUDO_USER` key never tested. Use Linode LISH to fix `authorized_keys`. |
+
+---
+
+## Ops: who's registered? (no admin UI yet)
+
+There's no admin layer, so to see registered users just query Postgres
+directly on the server. The service is `ikemen-db`.
+
+```bash
+sudo dokku postgres:connect ikemen-db
+```
+
+Then, at the psql prompt (`\q` to exit):
+
+```sql
+SELECT id, email, display_name, timezone, is_active, created_at
+FROM users
+ORDER BY created_at DESC;
+
+SELECT count(*) FROM users;                    -- total registered
+SELECT email, created_at FROM users            -- last 7 days
+  WHERE created_at > now() - interval '7 days'
+  ORDER BY created_at DESC;
+```
+
+Heads-up: the `1fe11a2c1211_seed_temporary_dev_user` migration seeds a
+temporary dev user, so an unfamiliar account is probably that — filter it
+out (or delete it) before real signups matter. A proper admin view is on
+the future-features list.
 
 ---
 

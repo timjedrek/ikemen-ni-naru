@@ -3,6 +3,8 @@
 A health-tracker app for learning FastAPI and Qwik. It tracks food intake, weight,
 mood, and sleep.
 
+**Live at [health.timjedrek.com](https://health.timjedrek.com).**
+
 **Backend:** FastAPI (Python), managed with `uv`.
 **Frontend:** Qwik (JavaScript/TypeScript).
 **Database:** PostgreSQL, run locally in Docker.
