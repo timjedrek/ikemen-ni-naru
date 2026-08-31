@@ -116,3 +116,40 @@ Add `alcohol_g` column, fold 7 kcal/g into auto-calc, expose as 4th macro input.
 5. **M3 food lookup** — Search-as-you-type or a separate lookup modal? Does it auto-fill macros or just the food name?
 6. **M5 photos** — S3 or Linode object storage? Who pays / what's the budget?
 7. **L1 reusable chart** — Should entry pages and view pages stay as they are now, or merge?
+
+
+/////// AI generated improvements..
+
+  UI/UX Issues
+
+  High impact:
+
+  1. No delete confirmation — EntryRow deletes immediately on click. One misclick and an entry is gone with no undo. A
+  simple "Are you sure?" or even a 3-second toast with an undo option would help a lot.
+  2. Mood score is a <select> dropdown — A 1–10 scale is inherently spatial. A range slider would be much more intuitive
+   and faster to use than opening a dropdown and picking a number. Could add emoji anchors (😢 → 😁) at the ends.
+  3. "Where" field label on food form — The field is serving_description but labeled "Where". This is confusing — users
+  expect "Where" to mean location. Better labels: "Serving size", "Description", or just "Notes (serving)".
+  4. Dashboard requires lots of scrolling on mobile — The "Today" feed is below four charts. If someone opens the app to
+   quickly log something or check today, they have to scroll past all the chart cards first. Consider moving Today
+  higher or making the charts collapsible.
+
+  Medium impact:
+
+  5. "Jump to date" input in nav is invisible on desktop — It's just a bare date picker after the nav links with no
+  label visible on screen (sr-only). Most users won't know it's there. A small calendar icon button that reveals the
+  picker would be clearer.
+  6. Multiplier field is jargon-heavy — "Multiplier (servings)" is technical. Renaming it to "Servings" and using step
+  0.25 (common serving fractions) would be friendlier.
+  7. Food macro precision in entry list — The list shows raw decimal strings: P 12.5g · C 30.0g · F 8.75g. These come
+  straight from the DB without rounding. Math.round() on display would be cleaner.
+
+  Low impact / polish:
+
+  8. Mood score in list is just a number — "5 / 10" as a title is a bit cold. Even a colored indicator
+  (green/yellow/red) based on the score would give the list visual scanability.
+  9. The Day/All toggle label — "← Back to day" is fine but "Show all" doesn't convey what it does well — "All time" or
+  "Feed" might be clearer.
+  10. "Date" label in TrackerShell — On tracker pages, the date picker is labeled just "Date". Since it filters entries,
+   something like "Viewing" or "For date" would communicate its purpose better.
+
