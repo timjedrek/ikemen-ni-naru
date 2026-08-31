@@ -105,7 +105,7 @@ export default component$(() => {
     <TrackerShell
       user={t.authUser.value}
       title="Weight"
-      subtitle="Log it whenever — each weigh-in keeps its own time."
+      subtitle="Losing or adding weight is a matter of calories in and calories out"
       mode={t.mode.value}
       selectedDate={t.selectedDate.value}
       onDateChange$={t.setDate}

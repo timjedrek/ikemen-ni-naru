@@ -90,7 +90,7 @@ export default component$(() => {
     <TrackerShell
       user={t.authUser.value}
       title="Sleep"
-      subtitle="Enter when you fell asleep and woke — naps included."
+      subtitle="Sleep is what affects your mood and productivity the most.  Make it a priority to get enough sleep."
       mode={t.mode.value}
       selectedDate={t.selectedDate.value}
       onDateChange$={t.setDate}

@@ -102,7 +102,7 @@ export default component$(() => {
     <TrackerShell
       user={t.authUser.value}
       title="Mood"
-      subtitle="A journal — log it as often as your day shifts."
+      subtitle="Thoughts change your feelings.  Your feelings change your behavior.  Behavior changes your reality."
       mode={t.mode.value}
       selectedDate={t.selectedDate.value}
       onDateChange$={t.setDate}
