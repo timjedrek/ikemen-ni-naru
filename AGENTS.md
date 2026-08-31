@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Conventions for AI/agents working in this repo.
 
+Do NOT just jump into editing code.  A well thought out plan that is quality checked by the human needs to be done before any code edits.  Record the plan in the log.
+
+After a fix or after a new feature, record changes in the log.
+
 ## Project overview
 
 A health-tracker app (food, weight, mood, sleep) built with FastAPI + Qwik. Live at health.timjedrek.com.

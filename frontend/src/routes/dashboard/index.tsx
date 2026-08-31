@@ -129,6 +129,7 @@ const COLOR = {
   protein: "#10b981", // emerald-500 (brand)
   carb: "#8b5cf6", // violet-500 (accent)
   fat: "#f59e0b", // amber-500
+  other: "#f43f5e", // rose-500 (manual / alcohol / untracked)
   weight: "#059669", // emerald-600
   mood: "#8b5cf6", // violet-500
   sleep: "#6366f1", // indigo-500
@@ -152,16 +153,17 @@ type FoodTip = {
   marker: string;
   axisValueLabel: string;
   value: number;
-  data: { grams: number };
+  data: { grams: number | null };
 };
 function foodTooltip(params: FoodTip[]): string {
   const head = params[0]?.axisValueLabel ?? "";
   const total = params.reduce((sum, p) => sum + (p.value || 0), 0);
   const rows = params
-    .map(
-      (p) =>
-        `${p.marker}${p.seriesName}: <strong>${p.value} kcal</strong> (${p.data.grams} g)`,
-    )
+    .filter((p) => p.value > 0)
+    .map((p) => {
+      const gramsLabel = p.data.grams !== null ? ` (${p.data.grams} g)` : "";
+      return `${p.marker}${p.seriesName}: <strong>${p.value} kcal</strong>${gramsLabel}`;
+    })
     .join("<br/>");
   return `${head}<br/>${rows}<br/>Total: <strong>${total} kcal</strong>`;
 }
@@ -182,11 +184,23 @@ function foodOption(series: FoodSeries, days: string[], dark: boolean): object {
       const g = p ? Math.round(Number(grams(p))) : 0;
       return { value: p ? Math.round(g * factor) : 0, grams: g, date };
     });
+  // "Other" = any calories not explained by macro math (alcohol, manual
+  // overrides, etc.). The stored `calories` field is the source of truth;
+  // the macro stack can only account for protein/carb/fat contributions.
+  const otherData = days.map((date) => {
+    const p = byDay.get(date);
+    if (!p) return { value: 0, grams: null, date };
+    const computed =
+      Math.round(Number(p.protein_g)) * 4 +
+      Math.round(Number(p.carb_g)) * 4 +
+      Math.round(Number(p.fat_g)) * 9;
+    return { value: Math.max(0, p.calories - computed), grams: null, date };
+  });
   return {
     grid: baseGrid,
     tooltip: { trigger: "axis", formatter: foodTooltip },
     legend: {
-      data: ["Protein", "Carbs", "Fat"],
+      data: ["Protein", "Carbs", "Fat", "Other"],
       top: 0,
       right: 0,
       textStyle: { color: n.axis },
@@ -229,6 +243,16 @@ function foodOption(series: FoodSeries, days: string[], dark: boolean): object {
         lineStyle: { width: 1 },
         color: COLOR.fat,
         data: macro(9, (p) => p.fat_g),
+      },
+      {
+        name: "Other",
+        type: "line",
+        stack: "cal",
+        areaStyle: { opacity: 0.7 },
+        showSymbol: false,
+        lineStyle: { width: 1 },
+        color: COLOR.other,
+        data: otherData,
       },
     ],
   };
