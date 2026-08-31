@@ -1,3 +1,62 @@
+8/31/2026 -> Bug report / features discussion after using the app for 1 and a half days..
+
+
+## Bugs
+
+- After submitting a form, the day feed at the bottom does not update. New posts appear only after a full page refresh. This may be the same issue as “can’t add another post.”
+- After deleting a record, new entries cannot be added. A brief flash appears in the feed, then nothing. Logging out and back in resets it (possible session issue). Might be related to above issue after submitting a form.
+- iPhone Safari: focusing a form field auto-zooms. After leaving the field and saving, the whole viewport stays at the wrong size.
+- iPhone Safari: “Ru” on the home splash (naru) is cut off.
+- Long notes are truncated in the feed with no “view more.” <- actually no.  Its not truncated.  Its the same issue as above with the no update after submit thing.
+- Date/time placeholder in the form used GMT/Zulu; the form itself did not work in that state. <- Yes, when using the app, sometimes it defaults to local time, others go to GMT time
+- Mobile Safari: date fields have no outlines; mobile date selection in the menu did not work (may have been tied to the earlier Safari breakage). < - on chrome it works well.  Its the default safari date selector. 
+- Alcohol calories are logged but are not included in the dashboard chart equation.
+
+## Future features / product work
+
+**Meals & food**
+- Auto-select meal type by time of day:  
+  5:00–10:30 breakfast, 10:30–15:30 lunch, 15:30–20:00 dinner, 20:00–05:00 snack.
+- Duplicate / copy button that prefills the form from an existing entry (same day or earlier days).
+- Food item lookup via [Open Nutrition](https://www.opennutrition.app/download), with required attribution.
+- On the food entry page only: short blurb + link, e.g. “food lookup by XXX.”
+- Treat entry date/time as first-class (retroactive logging is common).
+
+**Mood, photos, starring**
+- Split mood into Overall (current), Body, and Mind.
+- Photos on mood and food entries (S3 or Linode object storage).
+- Star entries and a way to surface starred items.
+
+**Exercise**
+- New exercise log: start/stop time, place, description, type (cardio / weights / both), intensity score, photos (same pattern as mood/food).
+
+**Navigation & layout**
+- Previous / next day buttons on the day feed.
+- Expandable text box on forms (called out as helpful on Android).
+- Footer on all pages: logo, “open source project,” links.
+- About page.
+
+**Copy & polish**
+- Change login page copy.
+- Change health-check copy; remove the word “backend.”
+- Dummy/health JSON on splash (e.g. something like “health: tracked”) — copy still TBD.
+
+**Misc notes from the logs**
+- Dashboard charts currently ignore alcohol calories even when they are stored.
+- Several Safari-only issues clustered around forms, zoom, date pickers, and splash text.
+
+
+
+
+//////////
+
+Other thoughts I have,
+We already have charts on the dashboard with date pickers.  Can we make that a reusable component and then bring it to the entry pages on top?
+
+Should Entry pages and View pages be the same as it is right now?
+
+----
+
 # Future Features
 
 Deferred until after the app is deployed and usable. None of these block a live
