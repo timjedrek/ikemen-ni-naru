@@ -80,7 +80,7 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
   const data = useSignal<DayDetail | null>(null);
   const loading = useSignal(false);
   const error = useSignal<string | null>(null);
-  const view = useSignal<DayView>("category");
+  const view = useSignal<DayView>("time");
 
   const reload = $(async () => {
     loading.value = true;
