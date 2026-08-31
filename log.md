@@ -5,6 +5,26 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Health check now verifies DB connectivity
+
+The homepage health card only pinged the API, so it reported green even when
+Postgres was down — misleading, since the app can't function without the DB.
+
+**Backend (`app/api/routes/health.py`):** `/health` now injects a `Session` and
+runs `SELECT 1`. On success it returns `{"status": "ok", "database":
+"connected"}`; on `SQLAlchemyError` it raises **503** with detail "Database
+connection failed". Chose 503-on-failure (over returning 200 with a
+`disconnected` field) so the check honestly reports the app as down.
+
+**Frontend:** no change needed — the homepage just renders the JSON, and
+`apiFetch` already throws `ApiError` on non-2xx, so the 503 flips the card to the
+red "Backend connection failed" banner automatically.
+
+**Testing DB-down locally:** `docker compose stop db` → reload homepage (red) →
+`docker compose start db` (green). `stop`, not `down`, to keep the volume.
+
+---
+
 ## 2026-08-30 — Tracker summary-card tweaks + mood day chart
 
 Follow-up polish on the tracker pages after the unified-shell refactor.
