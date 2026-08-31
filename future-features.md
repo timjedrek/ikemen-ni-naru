@@ -19,7 +19,7 @@
   5:00–10:30 breakfast, 10:30–15:30 lunch, 15:30–20:00 dinner, 20:00–05:00 snack.
 - Duplicate / copy button that prefills the form from an existing entry (same day or earlier days).
 - Food item lookup via [Open Nutrition](https://www.opennutrition.app/download), with required attribution.
-- On the food entry page only: short blurb + link, e.g. “food lookup by XXX.”
+- On the food entry page only: short blurb + link, e.g. “food lookup by XXX.” <- this is attributino link to Open Nutrition on the very bottom footer.
 - Treat entry date/time as first-class (retroactive logging is common).
 
 **Mood, photos, starring**
@@ -46,7 +46,9 @@
 - Several Safari-only issues clustered around forms, zoom, date pickers, and splash text.
 
 
-
+Othes stuff just thought of
+- robots.txt <- make sure to block everything past login.  Shouldnt be accessible anyways without user auth
+Weight chart.  Let's make it adjustable for the y-axis.  For me personally using the app, I want like max 255 and lowest at 190.  But everyone has a different range so its not duplicatable if say I'm a female using the app and I only weigh 140 and I want to get down to 130.
 
 //////////
 
@@ -54,6 +56,66 @@ Other thoughts I have,
 We already have charts on the dashboard with date pickers.  Can we make that a reusable component and then bring it to the entry pages on top?
 
 Should Entry pages and View pages be the same as it is right now?
+
+/////////
+
+RAW text from using the app..
+
+QA / bugs / product only. Personal health notes stripped. Mixed entries are cut down to the dev sentences.
+
+### Sunday, Aug 30, 2026
+
+**11:43 PM** — Food · Chocolate biscuit  
+Another feature: depending on the day, auto select breakfast lunch dinner. 5am to 10:30 am breakfast 10:30 to 3:30 lunch 3:30 pm to 8pm dinner 8 to 5 am snack.
+
+**11:32 PM** — Mood 7/10  
+Another update needed. So like in the docs in the repo. Like build plan and deploy plan, there's a mention of like the test user and migration id or something. First let's look for it in the db. And second, let's remove in the main docs and just put it in the log file.
+
+**10:40 PM** — Mood 8/10  
+Also need to change copy on the login page. And like when I go to enter the form on iPhone safari, it auto zooms to the field. (Which is small and not adjustable). So when I click out and save changes, the window size is wrong for the whole screen. And. After submitting the form, the bottom day entries don’t update. That’s when I think the can’t add another post comes from. I have to refresh the page and then it works. Other things… The Ru in the home splash screen in naru is cut off in mobile view safari. Change the copy for health check. Remove the word backend. Then we can add some dummy json lol Like health: tracked Iono. I’ll come up with something more creative later.
+
+**10:24 PM** — Food · テキーラ！  
+So the question now is on the dashboard chart, are the calories from alcohol going to fat? The answer is YA. Hahaha. Ya as in alcohol will lead to fat. But no in the charts. It just doesn’t add it in the equation. A duplication button would be nice. You click the button and it prefills the form. So like if I had a cookie earlier. Then had another one later. Or another day like if I had a cookie yesterday or last week. I could just copy it over to prefill.
+
+**10:20 PM** — Mood 8/10  
+Testing the app. It’s chill. It’s like mostly there. Which is insane.
+
+**10:15 PM** — Mood 8/10  
+Test 123
+
+**10:15 PM** — Mood 7/10  
+Hmmm.. weird bug. After I deleted a record, I can’t add new entries anymore. When I try there’s a small blip in the feed. But then it does away in a millisecond. Logging out and back in seems to have solved it. So that helps reset the session I guess which might be connected. Another part of it was the time zone that was autofilled like as a placeholder in the form. It was gmt Zulu time. The form didn’t work though so yea. Also this message gets cut off in the feed. I guess put a view more thing then. Another feature to add would be ⭐️ staring entries. And then we need to figure out a way to go show them.
+
+**8:01 PM** — Food · Another shot lol  
+Updating the app right now..
+
+**6:09 PM** — Mood 8/10  
+testing scroll
+
+**6:09 PM** — Mood 8/10  
+scroll test 2
+
+**2:49 PM** — Mood 9/10  
+Yay. I deployed the app and this thing is live.
+
+**1:26 PM** — Food · Coffee + milk  
+EDIT: we need to take into consideration the date/time of entry. Like I do in fact log things retroactively. But I really should log it right before or after I eat.
+
+---
+
+### Monday, Aug 31, 2026
+
+**1:15 AM** — Mood 6/10  
+Last feature for tonight. So for mood let's have additional score parameters. Overall (current one right now), body, mind.
+
+**12:57 AM** — Mood 6/10  
+Hmmm.. date Fields in the form look good in android. Although expanding this text box would be very helpful. Also.. another feature request. So let's log exercise. Like time start and stop, place, description, type (cardio, weight training, both), intensity score, and pics (implement same time as mood and food)
+
+**12:31 AM** — Mood 8/10  
+Test char Also. On mobile. Date fields have no outlines? Mobile menu date selection does not work on safari I guess while that was broken. I came up with another addition thatd be nice. On the day feed (after going to a specific date), there should be some buttons to go to the next or previous date. I guess if the nav bar date selector works that feature wouldn’t be as important.
+
+**12:25 AM** — Mood 5/10  
+Use this https://www.opennutrition.app/download For item look up feature It needs attribution. So with that being said, let’s make a footer for all of the pages. Put the logo there. Say it’s an open source project. Add some links. Let’s do an about page. On the food entry page only, we can add a blurb with the link that says food lookup by XXX. Also another feature. Photos. Let’s add it to the mood and food. We’ll need to setup an s3 bucket im assuming? Or I saw in linode there was a bucket option. We can look. Although s3 is free.
 
 ----
 
