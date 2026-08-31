@@ -5,6 +5,18 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Day feed defaults to "By time"
+
+All day feeds now open in the time-ordered view instead of grouped-by-category.
+
+**`components/day-feed/day-feed.tsx`:** flipped the initial `view` signal from
+`"category"` to `"time"` (line ~83). The DayFeed component is shared by the
+dashboard "Today" section and the `/day/[date]` pages, so both default to By time.
+The **By category** toggle is unchanged and still available; view state stays
+per-instance (switching on the dashboard doesn't carry to `/day/[date]`).
+
+---
+
 ## 2026-08-30 — Health check now verifies DB connectivity
 
 The homepage health card only pinged the API, so it reported green even when
