@@ -51,6 +51,9 @@ export function useTrackerLog<E extends { id: number }, F extends object>(
 
   const items = useSignal<E[]>([]);
   const total = useSignal(0);
+  // All-time entry count, independent of the day filter (Day mode's `total` is
+  // just the selected day's count). Powers the "Total …" summary cards.
+  const allTotal = useSignal(0);
   const listError = useSignal<string | null>(null);
   const listLoading = useSignal(false);
   const loadingMore = useSignal(false);
@@ -224,11 +227,28 @@ export function useTrackerLog<E extends { id: number }, F extends object>(
     }
   });
 
+  // Keep the all-time count fresh: fetch once authenticated, and refresh
+  // whenever the loaded set changes (a create/delete shifts the total). A
+  // limit-1 query is enough — we only read `total`, not the rows.
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(async ({ track }) => {
+    track(() => authChecked.value);
+    track(() => items.value);
+    if (!authChecked.value) return;
+    try {
+      const res = await config.list$({ limit: 1, offset: 0 });
+      allTotal.value = res.total;
+    } catch {
+      /* leave the last known total in place */
+    }
+  });
+
   return {
     authUser,
     authChecked,
     items,
     total,
+    allTotal,
     hasMore,
     listError,
     listLoading,

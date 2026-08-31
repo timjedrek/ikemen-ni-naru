@@ -5,6 +5,38 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Tracker summary-card tweaks + mood day chart
+
+Follow-up polish on the tracker pages after the unified-shell refactor.
+
+**Shared hook (`use-tracker-log.ts`):** added an `allTotal` signal — the all-time
+entry count, independent of the Day-mode `date` filter. Fetched via a `limit:1`
+no-date list (we only read `total`) on auth and refreshed whenever the loaded set
+changes, so create/delete keeps it current. Powers every "Total …" card.
+
+**Weight:** day-mode cards are now Latest · 7-day avg · **Today's avg** (mean of the
+day's weigh-ins) · **Today's weigh-ins** (renamed from "Weigh-ins") · **Total
+weigh-ins** (`allTotal`). Feed mode drops the two day-scoped cards.
+
+**Mood:** added a trailing **7-day avg** (via `getMoodAnalytics`, same pattern as
+weight) and made it the accent card — dropped the "Latest" card since it's already
+visible in the feed, keeping it to 4 cards (7-day avg · Average · Entries · Total
+entries). New **`MoodChart`** component renders in the full-width summary slot in Day
+mode: a 5 AM→midnight x-axis (same window as `DayTimeline`), 0–10 y-axis, one gently
+curved line (Catmull-Rom→bezier, `TENSION` dialed down to 0.06 so corners just
+soften). Each point is a clickable SVG target wired to `startEdit`.
+
+**Sleep:** day-mode "Sleep" card became **Total sleep** — the sum of the day's loaded
+durations. This is exact because the list buckets by `ended_at` local day, so the
+day's entries are the overnight sleep that ended that morning plus any naps. Added a
+**Total entries** card (`allTotal`).
+
+**Food:** no card changes (already 4). Logged an **analytics** section in
+`future-features.md` — trends over time, cross-tracker correlation — deferred until
+real usage clarifies which views earn their place.
+
+---
+
 ## 2026-08-30 — SHIPPED: unified tracker-log shell + Day/Feed modes
 
 What actually shipped from the plan below.

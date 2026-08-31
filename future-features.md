@@ -39,6 +39,18 @@ Not full coverage, just the parts where a bug is dangerous:
 
 ---
 
+## Better analytics — especially over time
+The per-page summary cards (latest, 7-day averages, daily totals, all-time
+counts) and the mood day chart are a start, but the app needs real
+trend/analysis views as data accumulates:
+- Longer-range trends per tracker (weight/mood/sleep/calories over weeks &
+  months), selectable ranges, moving averages.
+- Cross-tracker correlation (e.g. sleep vs. mood, calories vs. weight) — see
+  "Further-out ideas".
+- Totals/streaks/consistency and other rollups worth surfacing.
+Intentionally deferred: hold until real usage clarifies which views actually
+earn their place, rather than building charts speculatively.
+
 ## Goals
 (Was Phase B in the deployment plan; deferred — a nice feature, not a blocker
 for a live app.) One current goal record per user (not date-historical — see

@@ -1,4 +1,5 @@
-import { $, component$ } from "@builder.io/qwik";
+import { $, component$, useSignal, useVisibleTask$ } from "@builder.io/qwik";
+import { MoodChart } from "~/components/mood-chart/mood-chart";
 import { EntryRow } from "~/components/tracker/entry-row";
 import { FormCard } from "~/components/tracker/form-card";
 import { InfiniteSentinel } from "~/components/tracker/infinite-sentinel";
@@ -9,6 +10,7 @@ import { useTrackerLog } from "~/hooks/use-tracker-log";
 import {
   createMoodEntry,
   deleteMoodEntry,
+  getMoodAnalytics,
   getMoodEntry,
   listMoodEntries,
   updateMoodEntry,
@@ -20,6 +22,13 @@ type FormState = { recorded_at: string; mood_score: string; notes: string };
 
 function blankForm(): FormState {
   return { recorded_at: nowLocalInput(), mood_score: "5", notes: "" };
+}
+
+// Local YYYY-MM-DD from a Date, for the trailing-7-day analytics range.
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
 }
 
 const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -47,6 +56,28 @@ export default component$(() => {
       mood_score: String(entry.mood_score),
       notes: entry.notes ?? "",
     })),
+  });
+
+  // Trailing-7-day average — spans days beyond the selected one, so it comes
+  // from the analytics series. Refreshes whenever the list changes.
+  const avg7 = useSignal<number | null>(null);
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(async ({ track }) => {
+    track(() => t.authChecked.value);
+    track(() => t.items.value);
+    if (!t.authChecked.value) return;
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 6);
+    try {
+      const series = await getMoodAnalytics(isoDate(start), isoDate(end));
+      const nums = series.items.map((p) => p.mood_score);
+      avg7.value = nums.length
+        ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10
+        : null;
+    } catch {
+      avg7.value = null;
+    }
   });
 
   const editing = t.editingId.value !== null;
@@ -78,14 +109,18 @@ export default component$(() => {
       onToggleMode$={t.toggleMode}
     >
       {latest && (
-        <div q:slot="summary" class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Latest" value={`${latest.mood_score}`} unit="/ 10" accent />
-          {dayMode && <StatCard label="Average" value={`${avg}`} unit="/ 10" />}
-          <StatCard
-            label="Entries"
-            value={`${dayMode ? entries.length : t.total.value}`}
-            unit="logged"
-          />
+        <div q:slot="summary" class="mb-8 space-y-8">
+          {dayMode && entries.length > 0 && (
+            <MoodChart entries={entries} date={t.selectedDate.value} onPointClick$={t.startEdit} />
+          )}
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {avg7.value !== null && (
+              <StatCard label="7-day avg" value={`${avg7.value}`} unit="/ 10" accent />
+            )}
+            {dayMode && <StatCard label="Average" value={`${avg}`} unit="/ 10" />}
+            {dayMode && <StatCard label="Entries" value={`${entries.length}`} unit="logged" />}
+            <StatCard label="Total entries" value={`${t.allTotal.value}`} unit="logged" />
+          </div>
         </div>
       )}
 

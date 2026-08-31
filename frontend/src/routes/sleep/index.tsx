@@ -72,6 +72,11 @@ export default component$(() => {
   const editing = t.editingId.value !== null;
   const entries = t.items.value;
   const latest = entries[0]; // newest-first
+  const dayMode = t.mode.value === "day";
+  // Total sleep attributed to the day. The list is bucketed by wake time, so the
+  // day's entries are the overnight sleep that ended today plus any naps — their
+  // durations sum to the day's total.
+  const daySleep = entries.reduce((a, e) => a + e.duration_minutes, 0);
 
   if (!t.authChecked.value) {
     return (
@@ -94,12 +99,13 @@ export default component$(() => {
       {latest && (
         <div q:slot="summary" class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
-            label={t.mode.value === "day" ? "Sleep" : "Last sleep"}
-            value={formatDuration(latest.duration_minutes)}
+            label={dayMode ? "Total sleep" : "Last sleep"}
+            value={formatDuration(dayMode ? daySleep : latest.duration_minutes)}
             unit=""
             accent
           />
           <StatCard label="Quality" value={`${latest.quality_score}`} unit="/ 10" />
+          <StatCard label="Total entries" value={`${t.allTotal.value}`} unit="logged" />
         </div>
       )}
 

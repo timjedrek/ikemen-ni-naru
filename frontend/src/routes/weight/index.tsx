@@ -85,6 +85,13 @@ export default component$(() => {
   const latest = entries[0]; // newest-first
   const dayMode = t.mode.value === "day";
   const unit = latest?.unit ?? "lb";
+  // Average across the loaded day's weigh-ins (Day mode loads the whole day).
+  const dayAvg =
+    dayMode && entries.length > 0
+      ? Math.round(
+          (entries.reduce((a, e) => a + (Number(e.weight) || 0), 0) / entries.length) * 10,
+        ) / 10
+      : null;
 
   if (!t.authChecked.value) {
     return (
@@ -110,11 +117,11 @@ export default component$(() => {
           {avg7.value !== null && (
             <StatCard label="7-day avg" value={`${avg7.value}`} unit={unit} />
           )}
-          <StatCard
-            label="Weigh-ins"
-            value={`${dayMode ? entries.length : t.total.value}`}
-            unit="logged"
-          />
+          {dayAvg !== null && <StatCard label="Today's avg" value={`${dayAvg}`} unit={unit} />}
+          {dayMode && (
+            <StatCard label="Today's weigh-ins" value={`${entries.length}`} unit="logged" />
+          )}
+          <StatCard label="Total weigh-ins" value={`${t.allTotal.value}`} unit="logged" />
         </div>
       )}
 
