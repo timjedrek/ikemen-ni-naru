@@ -1,33 +1,25 @@
-import { $, component$, useSignal, useStore, useVisibleTask$ } from "@builder.io/qwik";
-import { useNavigate } from "@builder.io/qwik-city";
-import { AppHeader } from "~/components/app-header/app-header";
-import { PencilIcon, TrashIcon } from "~/components/icons/action-icons";
+import { $, component$, useSignal } from "@builder.io/qwik";
+import { EntryRow } from "~/components/tracker/entry-row";
+import { FormCard } from "~/components/tracker/form-card";
+import { InfiniteSentinel } from "~/components/tracker/infinite-sentinel";
+import { ListStates } from "~/components/tracker/list-states";
+import { StatCard } from "~/components/tracker/stat-card";
+import { TrackerShell } from "~/components/tracker/tracker-shell";
+import { useTrackerLog } from "~/hooks/use-tracker-log";
 import {
-  ApiError,
   createFoodEntry,
   deleteFoodEntry,
-  getCurrentUser,
   getFoodEntry,
   listFoodEntries,
   updateFoodEntry,
-  type User,
 } from "~/services/api";
 import {
   MEAL_CATEGORIES,
   type FoodEntry,
   type FoodEntryCreate,
-  type FoodEntryList,
   type MealCategory,
 } from "~/types/food-entry";
-
-// Local YYYY-MM-DD for <input type="date"> defaults. Built from local date
-// parts (not toISOString, which is UTC and can be off by a day near midnight).
-function todayIso(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
+import { formatDay } from "~/utils/datetime";
 
 // The form holds every field as a string (what inputs produce). Converted to
 // the API payload on submit.
@@ -83,195 +75,82 @@ function caloriesFromMacros(form: FormState): string {
   return String(Math.round((protein * 4 + carb * 4 + fat * 9) * mult));
 }
 
-// Tinted badge per meal — alternating brand/accent so the list scans quickly.
-const MEAL_BADGE: Record<string, string> = {
-  breakfast: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
-  lunch: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
-  dinner: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
-  snack: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
-};
-
 const labelClass = "block text-sm font-medium text-foreground";
 const inputClass =
   "mt-1.5 block w-full rounded-lg border-0 bg-surface px-3.5 py-2.5 text-foreground shadow-sm ring-1 ring-inset ring-line-strong transition placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500";
 
 export default component$(() => {
-  const nav = useNavigate();
-  // Auth gate: null until checked. We render nothing app-related until the
-  // check resolves, so protected data never flashes before a possible redirect.
-  const authUser = useSignal<User | null>(null);
-  const authChecked = useSignal(false);
-
-  const selectedDate = useSignal("");
-  const data = useSignal<FoodEntryList | null>(null);
-  const listError = useSignal<string | null>(null);
-  const listLoading = useSignal(false);
-
-  const form = useStore<FormState>(blankForm());
-  const formRef = useSignal<HTMLElement>();
-  const editingId = useSignal<number | null>(null);
-  const submitting = useSignal(false);
-  const formError = useSignal<string | null>(null);
-  // When true, Calories was typed by hand rather than derived from the 4/4/9
-  // macro math. This is how alcohol (7 kcal/g, not a tracked macro) gets logged
-  // — a shot is ~100 kcal with no protein/carb/fat. `manualBase` holds the
-  // per-serving calories typed; the displayed/submitted value is base ×
-  // multiplier, so 5 shots at 100 kcal reads 500.
+  // Calories can be typed by hand (alcohol: 7 kcal/g, not a tracked macro)
+  // rather than derived from the 4/4/9 macro math. `manualBase` holds the
+  // per-serving calories typed; the shown/submitted value is base × multiplier.
+  // These are food-only, so they live here and feed the hook via after-hooks.
   const manualCalories = useSignal(false);
   const manualBase = useSignal(0);
 
-  const reload = $(async () => {
-    if (!selectedDate.value) return;
-    listLoading.value = true;
-    try {
-      data.value = await listFoodEntries(selectedDate.value);
-      listError.value = null;
-    } catch (err) {
-      listError.value = err instanceof Error ? err.message : "Failed to load entries";
-    } finally {
-      listLoading.value = false;
-    }
+  const t = useTrackerLog<FoodEntry, FormState>({
+    initialForm: blankForm(),
+    blankForm$: $(() => blankForm()),
+    list$: $((params) => listFoodEntries(params)),
+    getById$: $((id) => getFoodEntry(id).catch(() => undefined)),
+    create$: $((payload) => createFoodEntry(payload as FoodEntryCreate)),
+    update$: $((id, payload) => updateFoodEntry(id, payload as FoodEntryCreate)),
+    delete$: $((id) => deleteFoodEntry(id)),
+    toPayload$: $((form, ctx): FoodEntryCreate => {
+      // Macros are typed per the label's serving, then scaled by the multiplier
+      // so stored values reflect the actual serving. Calories are already scaled.
+      const mult = multiplierValue(form);
+      return {
+        entry_date: ctx.date,
+        meal_category: form.meal_category,
+        food_name: form.food_name.trim(),
+        calories: Number(form.calories),
+        protein_g: scaleMacro(form.protein_g, mult),
+        carb_g: scaleMacro(form.carb_g, mult),
+        fat_g: scaleMacro(form.fat_g, mult),
+        serving_description: form.serving_description.trim() || null,
+        notes: form.notes.trim() || null,
+      };
+    }),
+    fromEntry$: $((entry): FormState => ({
+      food_name: entry.food_name,
+      meal_category: entry.meal_category,
+      serving_description: entry.serving_description ?? "",
+      calories: String(entry.calories),
+      multiplier: "1", // stored macros are already scaled; edit from 1x
+      protein_g: entry.protein_g,
+      carb_g: entry.carb_g,
+      fat_g: entry.fat_g,
+      notes: entry.notes ?? "",
+    })),
+    // Stored calories may not equal the macro math (e.g. alcohol), so an edit is
+    // treated as a manual value; multiplier resets to 1 so the total is the base.
+    afterStartEdit$: $((entry) => {
+      manualCalories.value = true;
+      manualBase.value = entry.calories;
+    }),
+    afterReset$: $(() => {
+      manualCalories.value = false;
+      manualBase.value = 0;
+    }),
   });
 
-  // Route protection (buildplan Step 34): confirm a valid session before
-  // showing anything. Unauthenticated → redirect to login. This is a usability
-  // guard; the backend remains the real security boundary (every API call is
-  // independently authenticated).
-  // eslint-disable-next-line qwik/no-use-visible-task
-  useVisibleTask$(async () => {
-    const user = await getCurrentUser();
-    if (!user) {
-      await nav("/login");
-      return;
-    }
-    authUser.value = user;
-    authChecked.value = true;
-    // Honor a deep link from the day report (?date=<day>) so its edit link lands
-    // on the right day; otherwise default to today. Triggers the load task below.
-    // Read from window.location (not useLocation) — after an SPA nav from the
-    // day report the reactive loc.url can still be stale here, dropping params.
-    const params = new URLSearchParams(window.location.search);
-    selectedDate.value = params.get("date") || todayIso();
-  });
+  const editing = t.editingId.value !== null;
 
-  const resetForm = $(() => {
-    Object.assign(form, blankForm());
-    editingId.value = null;
-    formError.value = null;
-    manualCalories.value = false;
-    manualBase.value = 0;
-  });
+  // Day-mode summary: totals for the loaded day (computed client-side — Day mode
+  // loads the whole day). Hidden in Feed mode where partial-page sums mislead.
+  const entries = t.items.value;
+  const dayTotals = entries.reduce(
+    (acc, e) => ({
+      calories: acc.calories + e.calories,
+      protein: acc.protein + (Number(e.protein_g) || 0),
+      carb: acc.carb + (Number(e.carb_g) || 0),
+      fat: acc.fat + (Number(e.fat_g) || 0),
+    }),
+    { calories: 0, protein: 0, carb: 0, fat: 0 },
+  );
+  const showSummary = t.mode.value === "day" && entries.length > 0;
 
-  // Drop ?edit from the URL after opening (or failing to open) the form, so a
-  // later reload or date change can't re-trigger editing from a stale param.
-  const clearEditParam = $(() => {
-    if (typeof window === "undefined") return;
-    const u = new URL(window.location.href);
-    if (!u.searchParams.has("edit")) return;
-    u.searchParams.delete("edit");
-    window.history.replaceState(null, "", u.pathname + u.search);
-  });
-
-  // On the single-column mobile/tablet layout the form is stacked above the
-  // list, so editing a lower entry leaves it off-screen. On desktop (lg+) the
-  // form is sticky and always visible, so only scroll below that breakpoint.
-  const scrollFormIntoView = $(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      formRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
-
-  const startEdit = $((entry: FoodEntry) => {
-    form.food_name = entry.food_name;
-    form.meal_category = entry.meal_category;
-    form.serving_description = entry.serving_description ?? "";
-    form.calories = String(entry.calories);
-    form.multiplier = "1"; // stored macros are already scaled; edit from 1x
-    form.protein_g = entry.protein_g;
-    form.carb_g = entry.carb_g;
-    form.fat_g = entry.fat_g;
-    form.notes = entry.notes ?? "";
-    editingId.value = entry.id;
-    formError.value = null;
-    // Preserve the stored calories as-is; they may not equal the macro math
-    // (e.g. an alcohol entry), so treat an edit as a manual value. Multiplier
-    // resets to 1, so the stored total is also the per-serving base.
-    manualCalories.value = true;
-    manualBase.value = entry.calories;
-    scrollFormIntoView();
-  });
-
-  // Reload whenever the selected date changes — but only once authenticated.
-  // NOTE: references startEdit/clearEditParam, which the Qwik optimizer captures
-  // by lexical scope at registration time — so they must be declared *above*
-  // this task, or they resolve to undefined when it runs.
-  // eslint-disable-next-line qwik/no-use-visible-task
-  useVisibleTask$(async ({ track }) => {
-    const date = track(() => selectedDate.value);
-    if (!authChecked.value || !date) return;
-    await reload();
-    // Deep link (?edit=<id>): once this date's entries are loaded, open that
-    // entry's edit form. Prefer this day's list; fall back to fetching by id so
-    // the link works even if the entry isn't among the loaded entries.
-    const editId = Number(new URLSearchParams(window.location.search).get("edit"));
-    if (editId) {
-      let entry = data.value?.items.find((e) => e.id === editId);
-      if (!entry) entry = await getFoodEntry(editId).catch(() => undefined);
-      if (entry) await startEdit(entry);
-      clearEditParam();
-    }
-  });
-
-  const submit = $(async () => {
-    submitting.value = true;
-    formError.value = null;
-    // Macros are typed per the label's serving, then scaled by the multiplier so
-    // the stored values reflect the actual serving. Calories are already scaled
-    // (caloriesFromMacros applies the multiplier). The API validates and coerces.
-    const mult = multiplierValue(form);
-    const payload: FoodEntryCreate = {
-      entry_date: selectedDate.value,
-      meal_category: form.meal_category,
-      food_name: form.food_name.trim(),
-      calories: Number(form.calories),
-      protein_g: scaleMacro(form.protein_g, mult),
-      carb_g: scaleMacro(form.carb_g, mult),
-      fat_g: scaleMacro(form.fat_g, mult),
-      serving_description: form.serving_description.trim() || null,
-      notes: form.notes.trim() || null,
-    };
-    try {
-      if (editingId.value !== null) {
-        await updateFoodEntry(editingId.value, payload);
-      } else {
-        await createFoodEntry(payload);
-      }
-      await resetForm();
-      await reload();
-    } catch (err) {
-      formError.value =
-        err instanceof ApiError ? err.message : "Something went wrong. Try again.";
-    } finally {
-      submitting.value = false;
-    }
-  });
-
-  const remove = $(async (id: number) => {
-    try {
-      await deleteFoodEntry(id);
-      if (editingId.value === id) await resetForm();
-      await reload();
-    } catch (err) {
-      listError.value = err instanceof Error ? err.message : "Failed to delete entry";
-    }
-  });
-
-  const totals = data.value?.totals;
-  const entries = data.value?.items ?? [];
-
-  // Hold the whole page until auth resolves so protected content can't flash
-  // before a redirect.
-  if (!authChecked.value) {
+  if (!t.authChecked.value) {
     return (
       <main class="flex min-h-screen items-center justify-center">
         <p class="text-sm text-muted">Loading…</p>
@@ -280,417 +159,252 @@ export default component$(() => {
   }
 
   return (
-    <div class="min-h-screen">
-      {/* Top bar */}
-      <AppHeader user={authUser.value} />
+    <TrackerShell
+      user={t.authUser.value}
+      title="Food tracking"
+      subtitle="You sure you need to eat that?"
+      mode={t.mode.value}
+      selectedDate={t.selectedDate.value}
+      onDateChange$={t.setDate}
+      onToggleMode$={t.toggleMode}
+    >
+      {showSummary && (
+        <div q:slot="summary" class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Calories" value={`${dayTotals.calories}`} unit="kcal" accent />
+          <StatCard label="Protein" value={`${Math.round(dayTotals.protein)}`} unit="g" />
+          <StatCard label="Carbs" value={`${Math.round(dayTotals.carb)}`} unit="g" />
+          <StatCard label="Fat" value={`${Math.round(dayTotals.fat)}`} unit="g" />
+        </div>
+      )}
 
-      <main class="mx-auto max-w-5xl px-6 py-8">
-        {/* Date selector */}
-        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 class="text-2xl font-bold tracking-tight text-foreground">
-              Food tracking
-            </h1>
-            <p class="mt-0.5 text-sm text-muted">
-              You sure you need to eat that?
-            </p>
-          </div>
-          <label class="flex items-center gap-2 text-sm font-medium text-foreground">
-            Date
+      <FormCard
+        q:slot="form"
+        formRef={t.formRef}
+        title={editing ? "Edit entry" : "Add an entry"}
+        subtitle={editing ? "Update the details below." : "Log a food and its macros."}
+        error={t.formError.value}
+        editing={editing}
+        submitting={t.submitting.value}
+        submitLabel={editing ? "Save changes" : "Add entry"}
+        onSubmit$={t.submit}
+        onCancel$={t.resetForm}
+      >
+        <div>
+          <label class={labelClass}>
+            Food name
             <input
-              type="date"
-              value={selectedDate.value}
-              onChange$={(_, el) => (selectedDate.value = el.value)}
-              class="rounded-lg border-0 bg-surface px-3 py-2 text-foreground shadow-sm ring-1 ring-inset ring-line-strong focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500"
+              type="text"
+              required
+              class={inputClass}
+              value={t.form.food_name}
+              onInput$={(_, el) => (t.form.food_name = el.value)}
             />
           </label>
         </div>
 
-        {/* Totals summary */}
-        {totals && entries.length > 0 && (
-          <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Calories" value={`${totals.calories}`} unit="kcal" accent />
-            <StatCard label="Protein" value={totals.protein_g} unit="g" />
-            <StatCard label="Carbs" value={totals.carb_g} unit="g" />
-            <StatCard label="Fat" value={totals.fat_g} unit="g" />
-          </div>
+        <div>
+          <label class={labelClass}>
+            Meal
+            <select
+              class={inputClass}
+              value={t.form.meal_category}
+              onChange$={(_, el) => (t.form.meal_category = el.value as MealCategory)}
+            >
+              {MEAL_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div>
+          <label class={labelClass}>
+            Where <span class="font-normal text-subtle">(optional)</span>
+            <input
+              type="text"
+              class={inputClass}
+              value={t.form.serving_description}
+              onInput$={(_, el) => (t.form.serving_description = el.value)}
+            />
+          </label>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <label class={labelClass}>
+            Protein
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              class={inputClass}
+              value={t.form.protein_g}
+              onInput$={(_, el) => {
+                t.form.protein_g = el.value;
+                if (!manualCalories.value) t.form.calories = caloriesFromMacros(t.form);
+              }}
+            />
+          </label>
+          <label class={labelClass}>
+            Carbs
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              class={inputClass}
+              value={t.form.carb_g}
+              onInput$={(_, el) => {
+                t.form.carb_g = el.value;
+                if (!manualCalories.value) t.form.calories = caloriesFromMacros(t.form);
+              }}
+            />
+          </label>
+          <label class={labelClass}>
+            Fat
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              class={inputClass}
+              value={t.form.fat_g}
+              onInput$={(_, el) => {
+                t.form.fat_g = el.value;
+                if (!manualCalories.value) t.form.calories = caloriesFromMacros(t.form);
+              }}
+            />
+          </label>
+        </div>
+
+        <div>
+          <label class={labelClass}>
+            <span class="flex items-center justify-between">
+              <span>
+                Calories{" "}
+                <span class="font-normal text-subtle">
+                  {manualCalories.value ? "(manual)" : "(auto)"}
+                </span>
+              </span>
+              {manualCalories.value && (
+                <button
+                  type="button"
+                  onClick$={() => {
+                    manualCalories.value = false;
+                    manualBase.value = 0;
+                    t.form.calories = caloriesFromMacros(t.form);
+                  }}
+                  class="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                >
+                  Use auto
+                </button>
+              )}
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              class={inputClass}
+              value={t.form.calories}
+              onInput$={(_, el) => {
+                // Typing sets a manual value; clearing reverts to auto.
+                if (el.value === "") {
+                  manualCalories.value = false;
+                  manualBase.value = 0;
+                  t.form.calories = caloriesFromMacros(t.form);
+                } else {
+                  manualCalories.value = true;
+                  // Typed number is the total at the current multiplier; store
+                  // the per-serving base so changing the multiplier rescales it.
+                  t.form.calories = el.value;
+                  manualBase.value = (Number(el.value) || 0) / multiplierValue(t.form);
+                }
+              }}
+            />
+          </label>
+        </div>
+
+        <div>
+          <label class={labelClass}>
+            Multiplier <span class="font-normal text-subtle">(servings)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              class={inputClass}
+              value={t.form.multiplier}
+              onInput$={(_, el) => {
+                t.form.multiplier = el.value;
+                t.form.calories = manualCalories.value
+                  ? String(Math.round(manualBase.value * multiplierValue(t.form)))
+                  : caloriesFromMacros(t.form);
+              }}
+            />
+          </label>
+        </div>
+
+        <div>
+          <label class={labelClass}>
+            Mood <span class="font-normal text-subtle">(optional)</span>
+            <textarea
+              rows={2}
+              class={inputClass}
+              value={t.form.notes}
+              onInput$={(_, el) => (t.form.notes = el.value)}
+            />
+          </label>
+        </div>
+      </FormCard>
+
+      <section q:slot="list" aria-labelledby="list-heading">
+        <h2
+          id="list-heading"
+          class="mb-4 text-lg font-semibold tracking-tight text-foreground"
+        >
+          {t.mode.value === "day"
+            ? `Entries for ${t.selectedDate.value || "today"}`
+            : "All entries"}
+        </h2>
+
+        <ListStates
+          loading={t.listLoading.value}
+          error={t.listError.value}
+          isEmpty={entries.length === 0}
+          emoji="🍽️"
+          emptyTitle={
+            t.mode.value === "day" ? "No entries yet for this day" : "No entries yet"
+          }
+        />
+
+        {entries.length > 0 && (
+          <ul class="space-y-3">
+            {entries.map((entry) => (
+              <EntryRow
+                key={entry.id}
+                title={entry.food_name}
+                badge={entry.meal_category}
+                sub={entry.serving_description}
+                meta={
+                  // In Feed mode entries span days, so lead with the day; in Day
+                  // mode the heading already states it, so show macros only.
+                  (t.mode.value === "all" ? `${formatDay(entry.entry_date)} · ` : "") +
+                  `${entry.calories} kcal · P ${entry.protein_g}g · C ${entry.carb_g}g · F ${entry.fat_g}g`
+                }
+                notes={entry.notes}
+                onEdit$={() => t.startEdit(entry)}
+                onDelete$={() => t.remove(entry.id)}
+              />
+            ))}
+          </ul>
         )}
 
-        <div class="grid gap-8 lg:grid-cols-[minmax(0,22rem)_1fr]">
-          {/* Form */}
-          <section
-            ref={formRef}
-            aria-labelledby="form-heading"
-            class="h-fit rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-line lg:sticky lg:top-24"
-          >
-            <h2
-              id="form-heading"
-              class="text-lg font-semibold tracking-tight text-foreground"
-            >
-              {editingId.value !== null ? "Edit entry" : "Add an entry"}
-            </h2>
-            <p class="mt-0.5 text-sm text-muted">
-              {editingId.value !== null
-                ? "Update the details below."
-                : "Log a food and its macros."}
-            </p>
-
-            {formError.value && (
-              <p
-                role="alert"
-                class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
-              >
-                {formError.value}
-              </p>
-            )}
-
-            <form preventdefault:submit onSubmit$={submit} class="mt-5 space-y-4">
-              <div>
-                <label class={labelClass}>
-                  Food name
-                  <input
-                    type="text"
-                    required
-                    class={inputClass}
-                    value={form.food_name}
-                    onInput$={(_, el) => (form.food_name = el.value)}
-                  />
-                </label>
-              </div>
-
-              <div>
-                <label class={labelClass}>
-                  Meal
-                  <select
-                    class={inputClass}
-                    value={form.meal_category}
-                    onChange$={(_, el) =>
-                      (form.meal_category = el.value as MealCategory)
-                    }
-                  >
-                    {MEAL_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div>
-                <label class={labelClass}>
-                  Where{" "}
-                  <span class="font-normal text-subtle">(optional)</span>
-                  <input
-                    type="text"
-                    class={inputClass}
-                    value={form.serving_description}
-                    onInput$={(_, el) => (form.serving_description = el.value)}
-                  />
-                </label>
-              </div>
-
-              <div class="grid grid-cols-3 gap-3">
-                <label class={labelClass}>
-                  Protein
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    class={inputClass}
-                    value={form.protein_g}
-                    onInput$={(_, el) => {
-                      form.protein_g = el.value;
-                      if (!manualCalories.value)
-                        form.calories = caloriesFromMacros(form);
-                    }}
-                  />
-                </label>
-                <label class={labelClass}>
-                  Carbs
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    class={inputClass}
-                    value={form.carb_g}
-                    onInput$={(_, el) => {
-                      form.carb_g = el.value;
-                      if (!manualCalories.value)
-                        form.calories = caloriesFromMacros(form);
-                    }}
-                  />
-                </label>
-                <label class={labelClass}>
-                  Fat
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    class={inputClass}
-                    value={form.fat_g}
-                    onInput$={(_, el) => {
-                      form.fat_g = el.value;
-                      if (!manualCalories.value)
-                        form.calories = caloriesFromMacros(form);
-                    }}
-                  />
-                </label>
-              </div>
-
-              <div>
-                <label class={labelClass}>
-                  <span class="flex items-center justify-between">
-                    <span>
-                      Calories{" "}
-                      <span class="font-normal text-subtle">
-                        {manualCalories.value ? "(manual)" : "(auto)"}
-                      </span>
-                    </span>
-                    {manualCalories.value && (
-                      <button
-                        type="button"
-                        onClick$={() => {
-                          manualCalories.value = false;
-                          manualBase.value = 0;
-                          form.calories = caloriesFromMacros(form);
-                        }}
-                        class="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                      >
-                        Use auto
-                      </button>
-                    )}
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    class={inputClass}
-                    value={form.calories}
-                    onInput$={(_, el) => {
-                      // Typing sets a manual value; clearing reverts to auto.
-                      if (el.value === "") {
-                        manualCalories.value = false;
-                        manualBase.value = 0;
-                        form.calories = caloriesFromMacros(form);
-                      } else {
-                        manualCalories.value = true;
-                        // The typed number is the total at the current
-                        // multiplier; store the per-serving base so changing the
-                        // multiplier rescales it (100 typed at ×5 → 500).
-                        form.calories = el.value;
-                        manualBase.value =
-                          (Number(el.value) || 0) / multiplierValue(form);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-
-              <div>
-                <label class={labelClass}>
-                  Multiplier{" "}
-                  <span class="font-normal text-subtle">(servings)</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    class={inputClass}
-                    value={form.multiplier}
-                    onInput$={(_, el) => {
-                      form.multiplier = el.value;
-                      form.calories = manualCalories.value
-                        ? String(
-                            Math.round(manualBase.value * multiplierValue(form)),
-                          )
-                        : caloriesFromMacros(form);
-                    }}
-                  />
-                </label>
-              </div>
-
-              <div>
-                <label class={labelClass}>
-                  Mood{" "}
-                  <span class="font-normal text-subtle">(optional)</span>
-                  <textarea
-                    rows={2}
-                    class={inputClass}
-                    value={form.notes}
-                    onInput$={(_, el) => (form.notes = el.value)}
-                  />
-                </label>
-              </div>
-
-              <div class="flex gap-3 pt-1">
-                <button
-                  type="submit"
-                  disabled={submitting.value}
-                  class="flex flex-1 items-center justify-center rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting.value
-                    ? "Saving…"
-                    : editingId.value !== null
-                      ? "Save changes"
-                      : "Add entry"}
-                </button>
-                {editingId.value !== null && (
-                  <button
-                    type="button"
-                    disabled={submitting.value}
-                    onClick$={resetForm}
-                    class="rounded-lg px-4 py-2.5 text-sm font-semibold text-muted ring-1 ring-line transition-colors hover:bg-surface-muted"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          </section>
-
-          {/* Entries list */}
-          <section aria-labelledby="list-heading">
-            <h2
-              id="list-heading"
-              class="mb-4 text-lg font-semibold tracking-tight text-foreground"
-            >
-              Entries for {selectedDate.value || "today"}
-            </h2>
-
-            {listLoading.value && <p class="text-sm text-muted">Loading…</p>}
-            {listError.value && (
-              <p
-                role="alert"
-                class="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
-              >
-                {listError.value}
-              </p>
-            )}
-
-            {!listLoading.value && !listError.value && entries.length === 0 && (
-              <div class="rounded-2xl border border-dashed border-line bg-surface/50 px-6 py-14 text-center">
-                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-2xl dark:bg-brand-500/15">
-                  🍽️
-                </div>
-                <p class="mt-4 text-sm font-medium text-foreground">
-                  No entries yet for this day
-                </p>
-                <p class="mt-1 text-sm text-muted">
-                  Add your first one using the form.
-                </p>
-              </div>
-            )}
-
-            {entries.length > 0 && (
-              <ul class="space-y-3">
-                {entries.map((entry) => (
-                  <li
-                    key={entry.id}
-                    class="group rounded-xl bg-surface p-4 shadow-sm ring-1 ring-line transition hover:shadow-md"
-                  >
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <h3 class="font-semibold text-foreground">
-                            {entry.food_name}
-                          </h3>
-                          <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MEAL_BADGE[entry.meal_category] ?? "bg-surface-muted text-muted"}`}
-                          >
-                            {entry.meal_category}
-                          </span>
-                        </div>
-                        {entry.serving_description && (
-                          <p class="mt-0.5 text-sm text-muted">
-                            {entry.serving_description}
-                          </p>
-                        )}
-                      </div>
-                      <div class="flex shrink-0 gap-1">
-                        <button
-                          type="button"
-                          onClick$={() => startEdit(entry)}
-                          aria-label="Edit entry"
-                          title="Edit"
-                          class="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
-                        >
-                          <PencilIcon />
-                        </button>
-                        <button
-                          type="button"
-                          onClick$={() => remove(entry.id)}
-                          aria-label="Delete entry"
-                          title="Delete"
-                          class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-400 dark:ring-red-900/50 dark:hover:bg-red-950/40"
-                        >
-                          <TrashIcon />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                      <span class="font-semibold text-foreground">
-                        {entry.calories}{" "}
-                        <span class="font-normal text-subtle">kcal</span>
-                      </span>
-                      <span class="text-muted">
-                        P <span class="font-medium">{entry.protein_g}g</span>
-                      </span>
-                      <span class="text-muted">
-                        C <span class="font-medium">{entry.carb_g}g</span>
-                      </span>
-                      <span class="text-muted">
-                        F <span class="font-medium">{entry.fat_g}g</span>
-                      </span>
-                    </div>
-
-                    {entry.notes && (
-                      <p class="mt-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">
-                        {entry.notes}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-      </main>
-    </div>
-  );
-});
-
-// Compact macro/calorie summary tile.
-const StatCard = component$<{
-  label: string;
-  value: string;
-  unit: string;
-  accent?: boolean;
-}>(({ label, value, unit, accent }) => {
-  return (
-    <div
-      class={`rounded-xl p-4 shadow-sm ring-1 ${
-        accent
-          ? "bg-gradient-to-br from-brand-600 to-accent-600 text-white ring-transparent"
-          : "bg-surface text-foreground ring-line"
-      }`}
-    >
-      <p
-        class={`text-xs font-medium uppercase tracking-wide ${accent ? "text-white/80" : "text-muted"}`}
-      >
-        {label}
-      </p>
-      <p class="mt-1 text-2xl font-bold tracking-tight">
-        {value}
-        <span
-          class={`ml-1 text-sm font-normal ${accent ? "text-white/70" : "text-subtle"}`}
-        >
-          {unit}
-        </span>
-      </p>
-    </div>
+        {t.loadingMore.value && <p class="mt-3 text-sm text-muted">Loading…</p>}
+        {t.mode.value === "all" && t.hasMore.value && (
+          <InfiniteSentinel onIntersect$={t.loadMore} />
+        )}
+      </section>
+    </TrackerShell>
   );
 });

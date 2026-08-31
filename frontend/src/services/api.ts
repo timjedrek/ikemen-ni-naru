@@ -194,11 +194,27 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 }
 
+// Shared list query params for every tracker: an optional local `date` (day
+// scoping) plus pagination. Building one query string keeps the four list
+// functions uniform so the shared tracker-log hook can call them the same way.
+export type ListParams = { date?: string; limit?: number; offset?: number };
+
+function listQuery(params: ListParams = {}): string {
+  const q = new URLSearchParams();
+  if (params.date) q.set("date", params.date);
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
 // --- Food entries (buildplan Phase 5) ---
 
-export function listFoodEntries(date?: string): Promise<FoodEntryList> {
-  const query = date ? `?date=${encodeURIComponent(date)}` : "";
-  return apiFetch<FoodEntryList>(`/food-entries${query}`);
+export function listFoodEntries(
+  params: string | ListParams = {},
+): Promise<FoodEntryList> {
+  const p = typeof params === "string" ? { date: params } : params;
+  return apiFetch<FoodEntryList>(`/food-entries${listQuery(p)}`);
 }
 
 export function createFoodEntry(data: FoodEntryCreate): Promise<FoodEntry> {
@@ -225,8 +241,10 @@ export function deleteFoodEntry(id: number): Promise<void> {
 
 // --- Weight entries (buildplan Phase 7) ---
 
-export function listWeightEntries(): Promise<WeightEntryList> {
-  return apiFetch<WeightEntryList>("/weight-entries");
+export function listWeightEntries(
+  params: ListParams = {},
+): Promise<WeightEntryList> {
+  return apiFetch<WeightEntryList>(`/weight-entries${listQuery(params)}`);
 }
 
 export function createWeightEntry(data: WeightEntryCreate): Promise<WeightEntry> {
@@ -253,8 +271,8 @@ export function deleteWeightEntry(id: number): Promise<void> {
 
 // --- Mood entries (buildplan Phase 7) ---
 
-export function listMoodEntries(): Promise<MoodEntryList> {
-  return apiFetch<MoodEntryList>("/mood-entries");
+export function listMoodEntries(params: ListParams = {}): Promise<MoodEntryList> {
+  return apiFetch<MoodEntryList>(`/mood-entries${listQuery(params)}`);
 }
 
 export function createMoodEntry(data: MoodEntryCreate): Promise<MoodEntry> {
@@ -281,8 +299,10 @@ export function deleteMoodEntry(id: number): Promise<void> {
 
 // --- Sleep entries (buildplan Phase 7) ---
 
-export function listSleepEntries(): Promise<SleepEntryList> {
-  return apiFetch<SleepEntryList>("/sleep-entries");
+export function listSleepEntries(
+  params: ListParams = {},
+): Promise<SleepEntryList> {
+  return apiFetch<SleepEntryList>(`/sleep-entries${listQuery(params)}`);
 }
 
 export function createSleepEntry(data: SleepEntryCreate): Promise<SleepEntry> {

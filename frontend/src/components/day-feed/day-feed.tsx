@@ -1,14 +1,7 @@
-import {
-  $,
-  component$,
-  type QRL,
-  Slot,
-  useSignal,
-  useVisibleTask$,
-} from "@builder.io/qwik";
+import { $, component$, Slot, useSignal, useVisibleTask$ } from "@builder.io/qwik";
 import { Link, useNavigate } from "@builder.io/qwik-city";
 import { DayTimeline } from "~/components/day-timeline/day-timeline";
-import { PencilIcon, TrashIcon } from "~/components/icons/action-icons";
+import { EntryRow } from "~/components/tracker/entry-row";
 import {
   deleteFoodEntry,
   deleteMoodEntry,
@@ -25,17 +18,6 @@ import { formatDateTime, formatDuration, formatTime } from "~/utils/datetime";
 
 // The two ways to read the day: grouped by tracker, or one time-ordered feed.
 type DayView = "category" | "time";
-
-type FeedKind = "food" | "sleep" | "mood" | "weight";
-
-// A tinted pill per tracker, so the "By time" feed (which interleaves all four)
-// stays scannable. Mirrors the meal badge palette used on the food page.
-const KIND_BADGE: Record<FeedKind, string> = {
-  food: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  sleep: "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300",
-  mood: "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300",
-  weight: "bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300",
-};
 
 // One entry from any tracker, tagged with the time it happened so the feed can
 // sort across all four. Food has no "eaten" time, so it uses created_at (when
@@ -252,7 +234,7 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
             <Section id="food" title="Food" href="/food">
               <ul class="space-y-3">
                 {d.food.map((e) => (
-                  <Row
+                  <EntryRow
                     key={e.id}
                     title={e.food_name}
                     badge={e.meal_category}
@@ -272,13 +254,13 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
             <Section id="sleep" title="Sleep" href="/sleep">
               <ul class="space-y-3">
                 {d.sleep.map((e) => (
-                  <Row
+                  <EntryRow
                     key={e.id}
                     title={formatDuration(e.duration_minutes)}
                     badge={`quality ${e.quality_score}/10`}
                     meta={`${formatDateTime(e.started_at)} → ${formatDateTime(e.ended_at)}`}
                     notes={e.notes}
-                    onEdit$={() => nav(`/sleep?edit=${e.id}`)}
+                    onEdit$={() => nav(`/sleep?date=${date}&edit=${e.id}`)}
                     onDelete$={() => removeSleep(e.id)}
                   />
                 ))}
@@ -291,12 +273,12 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
             <Section id="mood" title="Mood" href="/mood">
               <ul class="space-y-3">
                 {d.mood.map((e) => (
-                  <Row
+                  <EntryRow
                     key={e.id}
                     title={`${e.mood_score}/10`}
                     meta={formatDateTime(e.recorded_at)}
                     notes={e.notes}
-                    onEdit$={() => nav(`/mood?edit=${e.id}`)}
+                    onEdit$={() => nav(`/mood?date=${date}&edit=${e.id}`)}
                     onDelete$={() => removeMood(e.id)}
                   />
                 ))}
@@ -309,12 +291,12 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
             <Section id="weight" title="Weight" href="/weight">
               <ul class="space-y-3">
                 {d.weight.map((e) => (
-                  <Row
+                  <EntryRow
                     key={e.id}
                     title={`${e.weight} ${e.unit}`}
                     meta={formatDateTime(e.measured_at)}
                     notes={e.notes}
-                    onEdit$={() => nav(`/weight?edit=${e.id}`)}
+                    onEdit$={() => nav(`/weight?date=${date}&edit=${e.id}`)}
                     onDelete$={() => removeWeight(e.id)}
                   />
                 ))}
@@ -332,7 +314,7 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
               case "food": {
                 const e = item.e;
                 return (
-                  <Row
+                  <EntryRow
                     key={item.key}
                     kind="food"
                     title={e.food_name}
@@ -348,14 +330,14 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
               case "sleep": {
                 const e = item.e;
                 return (
-                  <Row
+                  <EntryRow
                     key={item.key}
                     kind="sleep"
                     title={formatDuration(e.duration_minutes)}
                     badge={`quality ${e.quality_score}/10`}
                     meta={`${formatTime(e.started_at)} → ${formatTime(e.ended_at)}`}
                     notes={e.notes}
-                    onEdit$={() => nav(`/sleep?edit=${e.id}`)}
+                    onEdit$={() => nav(`/sleep?date=${date}&edit=${e.id}`)}
                     onDelete$={() => removeSleep(e.id)}
                   />
                 );
@@ -363,13 +345,13 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
               case "mood": {
                 const e = item.e;
                 return (
-                  <Row
+                  <EntryRow
                     key={item.key}
                     kind="mood"
                     title={`${e.mood_score}/10`}
                     meta={formatTime(e.recorded_at)}
                     notes={e.notes}
-                    onEdit$={() => nav(`/mood?edit=${e.id}`)}
+                    onEdit$={() => nav(`/mood?date=${date}&edit=${e.id}`)}
                     onDelete$={() => removeMood(e.id)}
                   />
                 );
@@ -377,13 +359,13 @@ export const DayFeed = component$<{ date: string }>(({ date }) => {
               case "weight": {
                 const e = item.e;
                 return (
-                  <Row
+                  <EntryRow
                     key={item.key}
                     kind="weight"
                     title={`${e.weight} ${e.unit}`}
                     meta={formatTime(e.measured_at)}
                     notes={e.notes}
-                    onEdit$={() => nav(`/weight?edit=${e.id}`)}
+                    onEdit$={() => nav(`/weight?date=${date}&edit=${e.id}`)}
                     onDelete$={() => removeWeight(e.id)}
                   />
                 );
@@ -419,70 +401,3 @@ const Section = component$<{ id: string; title: string; href: string }>(
     );
   },
 );
-
-// One entry card, shared across all four trackers. In the "By time" feed a
-// `kind` pill is shown so the tracker each entry came from is obvious; the
-// grouped view omits it (the section heading already says which tracker).
-const Row = component$<{
-  title: string;
-  kind?: FeedKind;
-  badge?: string;
-  meta: string;
-  sub?: string | null;
-  notes?: string | null;
-  onEdit$?: QRL<() => void>;
-  onDelete$: QRL<() => void>;
-}>(({ title, kind, badge, meta, sub, notes, onEdit$, onDelete$ }) => {
-  return (
-    <li class="rounded-xl bg-surface p-4 shadow-sm ring-1 ring-line">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="flex flex-wrap items-center gap-2">
-            {kind && (
-              <span
-                class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${KIND_BADGE[kind]}`}
-              >
-                {kind}
-              </span>
-            )}
-            <h3 class="font-semibold text-foreground">{title}</h3>
-            {badge && (
-              <span class="inline-flex items-center rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium capitalize text-muted">
-                {badge}
-              </span>
-            )}
-          </div>
-          {sub && <p class="mt-0.5 text-sm text-muted">{sub}</p>}
-          <p class="mt-1 text-sm text-muted">{meta}</p>
-        </div>
-        <div class="flex shrink-0 gap-1">
-          {onEdit$ && (
-            <button
-              type="button"
-              onClick$={onEdit$}
-              aria-label="Edit entry"
-              title="Edit"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted ring-1 ring-line transition-colors hover:bg-surface-muted hover:text-foreground"
-            >
-              <PencilIcon />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick$={onDelete$}
-            aria-label="Delete entry"
-            title="Delete"
-            class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 dark:text-red-400 dark:ring-red-900/50 dark:hover:bg-red-950/40"
-          >
-            <TrashIcon />
-          </button>
-        </div>
-      </div>
-      {notes && (
-        <p class="mt-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">
-          {notes}
-        </p>
-      )}
-    </li>
-  );
-});

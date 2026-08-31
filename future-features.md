@@ -11,12 +11,15 @@ Pull from this list once the app is live; roughly ordered by value.
 Things that are shipped but not fully right. Log new ones here as they surface;
 add detail/repro when known.
 
-### Day-report timeline: edit buttons don't work 100%
-The edit affordance on the timeline (top of `/day/[date]`) doesn't reliably open
-the right entry for editing. More detail TBD. Deferred so deployment isn't
-blocked. (Related: the `?edit=<id>` deep link into the tracker pages is a no-op
-if the entry isn't in that page's currently-loaded list, and on the food page a
-manual date change can re-open the form while `?edit` lingers in the URL.)
+_(none open)_
+
+### ~~Day-report timeline: edit buttons don't work 100%~~ — FIXED 2026-08-30
+Root cause was a Qwik QRL declaration-order trap: the deep-link `useVisibleTask$`
+referenced `startEdit`/`clearEditParam` declared below it, so the optimizer
+captured them as undefined. Fixed by moving the handlers above the task, adding a
+`getById` fallback for entries outside the loaded page, and stripping `?edit`
+after opening. Later folded into the shared tracker-log shell (see log.md), where
+all four pages are date-scoped and the day report deep-links with `?date` too.
 
 ---
 

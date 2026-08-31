@@ -55,8 +55,9 @@ def list_food_entries(
     stmt = (
         select(FoodEntry)
         .where(*filters)
-        # Newest day first; within a day, insertion order via id keeps it stable.
-        .order_by(FoodEntry.entry_date.desc(), FoodEntry.id.asc())
+        # Newest first — newest day, and within a day newest-logged (id) on top,
+        # so the "show all" feed and the day view both read most-recent-first.
+        .order_by(FoodEntry.entry_date.desc(), FoodEntry.id.desc())
         .limit(limit)
         .offset(offset)
     )

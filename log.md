@@ -5,6 +5,46 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — SHIPPED: unified tracker-log shell + Day/Feed modes
+
+What actually shipped from the plan below.
+
+**Edit-button bug (prereq, fixed first):** the day-report edit deep link never
+worked because each page's `useVisibleTask$` referenced `startEdit`/`clearEditParam`
+declared *below* it — Qwik's optimizer captures QRLs by lexical scope at
+registration, so they resolved to `undefined` (`ReferenceError: startEdit is not
+defined`). Fixed by declaring handlers above the task, adding a `getById` fallback,
+and stripping `?edit` after opening. This constraint is now enforced once, centrally,
+in the shared hook.
+
+**Backend (`app/crud` + `app/api/routes` for mood/sleep/weight):** list endpoints
+take an optional `?date=` (alias) day filter, reusing `day_bounds_utc(day, tz_name)`
+with `current_user.timezone`, windowing on `recorded_at`/`ended_at`/`measured_at`
+respectively. Food unchanged (real `entry_date` column); its list ordering flipped
+to `entry_date desc, id desc` so the feed reads newest-first like the others.
+
+**Shared frontend pieces:** `src/hooks/use-tracker-log.ts` (a generic hook owning
+auth gate, Day/Feed mode, date-scoped load + infinite-scroll pagination, `?date`/
+`?edit` deep link, and create/update/delete/edit — configured by per-tracker QRLs);
+`src/components/tracker/{tracker-shell,form-card,stat-card,entry-row,list-states,
+infinite-sentinel}.tsx`. `EntryRow` is the day feed's old `Row`, promoted and reused
+(day-feed.tsx now imports it). `todayIso` + `formatDay` moved into `utils/datetime.ts`.
+
+**All four pages** now: default to **Day mode** (date picker, today) and toggle to a
+**Feed mode** (last 10, IntersectionObserver infinite scroll). Each page keeps only
+its own form fields, row mapping, and summary. Summaries: food = day macro totals;
+mood = latest/average(day)/count; sleep = duration/quality; weight = latest + 7-day
+average (via `getWeightAnalytics`). Food rows show the day in Feed mode.
+
+**DayFeed:** all four edit links now pass `?date=<report day>` so the date-scoped
+page loads the right day; the `getById` fallback covers any edge case.
+
+Verified: `tsc`/`eslint` clean; all routes SSR 200. Behavioral (Day/Feed toggle,
+infinite scroll, edit round-trip, macro/manual-calorie logic) confirmed on food in
+the browser; the other three follow the same shell.
+
+---
+
 ## 2026-08-30 — PLANNED: unify the four tracker pages behind a shared shell
 
 Approved plan (full detail in `~/.claude/plans/federated-popping-quokka.md`). Logged

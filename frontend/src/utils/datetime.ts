@@ -15,6 +15,14 @@ export function nowLocalInput(): string {
   return dateToLocalInput(new Date());
 }
 
+// Today as a local YYYY-MM-DD, for <input type="date"> defaults and day-scoped
+// list queries. Built from local date parts (not toISOString, which is UTC and
+// can be off by a day near midnight).
+export function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 // A Date → "YYYY-MM-DDTHH:MM" in the browser's local timezone.
 function dateToLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
@@ -40,6 +48,18 @@ export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
+  });
+}
+
+// A plain "YYYY-MM-DD" calendar date → friendly text, e.g. "Aug 29, 2026".
+// Built from the date parts (not new Date(iso), which parses as UTC midnight and
+// can render the previous day in western timezones).
+export function formatDay(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 }
 
