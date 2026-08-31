@@ -113,9 +113,8 @@ export default component$(() => {
     >
       {(latest || avg7.value !== null) && (
         <div q:slot="summary" class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {latest && <StatCard label="Latest" value={latest.weight} unit={latest.unit} accent />}
           {avg7.value !== null && (
-            <StatCard label="7-day avg" value={`${avg7.value}`} unit={unit} />
+            <StatCard label="7-day avg" value={`${avg7.value}`} unit={unit} accent />
           )}
           {dayAvg !== null && <StatCard label="Today's avg" value={`${dayAvg}`} unit={unit} />}
           {dayMode && (

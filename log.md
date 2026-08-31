@@ -5,6 +5,18 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — Weight stats: drop "Latest", emphasize 7-day average
+
+Trimmed the weight page header from 5 stat cards to 4 — removed the **Latest**
+card since the newest weigh-in already shows at the top of the feed below.
+
+**`routes/weight/index.tsx`:** deleted the `Latest` `StatCard` and moved the
+`accent` (gradient emphasis) onto the **7-day avg** card so the trailing average
+is now the visual focus. Left `latest` in place since it still derives the display
+`unit`, and the summary still renders when `latest || avg7 !== null`.
+
+---
+
 ## 2026-08-30 — README notes live deploy; queries moved to their own file
 
 Added a "Live at health.timjedrek.com" line near the top of `README.md` — kept it
