@@ -55,8 +55,7 @@ export default component$(() => {
         Health Tracker
       </h1>
       <p class="mt-4 max-w-lg text-lg text-muted">
-        Log your meals, track your macros, and keep an eye on the numbers that
-        matter — one day at a time.
+        What you measure improves.  Let's become more healthy!
       </p>
 
       <nav class="mt-8 flex flex-wrap gap-3">
