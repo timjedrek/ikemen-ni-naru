@@ -5,6 +5,29 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-31 — Dashboard food chart: add "Other" series for alcohol / manual calories
+
+Fixed B4: alcohol calories (and any other manually-entered calorie overrides) were
+not appearing in the dashboard food chart. The chart was computing calories from
+macro grams using Atwater factors (`protein×4 + carb×4 + fat×9`) and ignoring the
+stored `calories` field entirely. A shot logged as 100 kcal / 0 macros showed as 0.
+
+**Root cause:** `foodOption` in `routes/dashboard/index.tsx` never used
+`FoodDayPoint.calories` — it was returned by the backend but discarded.
+
+**Fix (frontend-only, no migration):**
+- Added `COLOR.other` (rose-500) to the palette.
+- Added `otherData`: per-day `max(0, stored_calories − computed_macro_calories)`.
+  Uses the backend's authoritative `calories` field as the source of truth.
+- Added a 4th stacked series **"Other"** (same `stack: "cal"` group) so the chart
+  height now equals the true daily calorie total.
+- Updated `foodTooltip` to filter zero-value rows and skip the "(X g)" suffix for
+  series with no gram equivalent (i.e. "Other").
+
+Files changed: `frontend/src/routes/dashboard/index.tsx`.
+
+---
+
 ## 2026-08-30 — Weight stats: drop "Latest", emphasize 7-day average
 
 Trimmed the weight page header from 5 stat cards to 4 — removed the **Latest**
