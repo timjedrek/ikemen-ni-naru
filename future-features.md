@@ -57,6 +57,8 @@ We already have charts on the dashboard with date pickers.  Can we make that a r
 
 Should Entry pages and View pages be the same as it is right now?
 
+Looking at the mood chart.  Which will also affect the weight chart too I guess.. Its becoming a tangled mess with every point from previous day hitting all points of the next day.  What if we make a line from the highest value to lowest value of the day so a vertical line for that day.  Then, just the highest value connects to the highest value of the next day.  Same with he lowest value.  The lowest value of the day then connects to the lowest value of the next day. So instead of a web, its more of like a pipe.
+
 /////////
 
 RAW text from using the app..
