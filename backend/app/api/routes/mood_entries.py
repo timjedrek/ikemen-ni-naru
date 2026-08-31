@@ -5,6 +5,8 @@ rationale): every route passes the authenticated user's id into the CRUD layer,
 which queries by id AND owner together.
 """
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -35,11 +37,21 @@ def create_entry(
 def list_entries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    day: date | None = Query(
+        default=None,
+        alias="date",
+        description="Return only entries recorded on this local day (ISO 8601).",
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> MoodEntryList:
     items, total = crud.list_mood_entries(
-        db, current_user.id, limit=limit, offset=offset
+        db,
+        current_user.id,
+        day=day,
+        tz_name=current_user.timezone,
+        limit=limit,
+        offset=offset,
     )
     return MoodEntryList(items=items, total=total, limit=limit, offset=offset)
 

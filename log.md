@@ -5,6 +5,49 @@ Newest entries first. For the overall plan see `buildplan.md`.
 
 ---
 
+## 2026-08-30 — PLANNED: unify the four tracker pages behind a shared shell
+
+Approved plan (full detail in `~/.claude/plans/federated-popping-quokka.md`). Logged
+before implementation; a follow-up entry will record what actually shipped.
+
+**Why:** `food`, `sleep`, `mood`, `weight` are structurally identical but were built
+separately and drifted — only food is date-scoped (date picker, today-by-default,
+backend `entry_date` filter); the other three show a global recent feed. The
+duplicated per-page logic is where the recent edit-button bug lived (a
+`useVisibleTask$`/QRL declaration-order trap repeated four times — fixed today by
+moving QRL handlers above the task in each file).
+
+**Goal behavior:** all four default to a **Day view** (date picker, today's entries)
+with a **"Show all"** button that switches to a **Feed view** (last 10, infinite
+scroll). Editing from the day report lands on the right page **and date**.
+
+**Architecture:** shared logic **hook** + shared presentational components; each page
+keeps its own form JSX and entry→row mapping rendered inline. (A hook, not a slotted
+shell, because Qwik can't serialize render-prop closures across resume — but a hook
+runs in the page's own scope, so it also enforces the QRL-ordering fix once, centrally.)
+- New: `src/hooks/use-tracker-log.ts` (all state + handlers + the two visible tasks,
+  configured by a `TrackerConfig<E,F>` of QRLs); `src/components/tracker/`:
+  `tracker-shell.tsx` (chrome + Day/Feed switch + named slots), `stat-card.tsx`,
+  `entry-row.tsx` (promote DayFeed's generic `Row`), `list-states.tsx`,
+  `infinite-sentinel.tsx` (IntersectionObserver, `rootMargin: 200px`).
+- `todayIso()` moves into `src/utils/datetime.ts`.
+
+**Backend (additive; food untouched):** add optional `?date=` day filter to the
+mood/sleep/weight list endpoints + CRUD, reusing `day_bounds_utc(day, tz_name)`
+(`app/crud/analytics.py`) with `current_user.timezone`, windowing on each tracker's
+analytics column (mood→`recorded_at`, weight→`measured_at`, sleep→`ended_at`).
+
+**DayFeed:** pass the report's date to all four edit links
+(`/{tracker}?date=${date}&edit=${id}`); the hook keeps the `getById` fallback as
+belt-and-suspenders. Params read via `window.location.search` (reactive `loc.url` is
+stale right after an SPA nav).
+
+**Order:** backend → `api.ts` list signatures → shared pieces → **food first (verify)**
+→ sleep/mood/weight → DayFeed links → docs (move edit-button item out of
+`future-features.md` Known bugs).
+
+---
+
 ## 2026-08-30 — Landing page auth-aware CTAs
 
 Tightened the logged-out landing page (`frontend/src/routes/index.tsx`).
